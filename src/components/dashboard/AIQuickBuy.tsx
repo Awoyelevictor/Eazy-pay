@@ -13,6 +13,16 @@ import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestor
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
+// Price mapping for AI consistency
+const PRICE_MAP: Record<string, number> = {
+  '1GB': 300,
+  '2GB': 600,
+  '5GB': 1500,
+  '10GB': 2900,
+  '20GB': 5500,
+  '40GB': 10000,
+};
+
 export function AIQuickBuy() {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -40,8 +50,8 @@ export function AIQuickBuy() {
       setPrompt("");
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to process your request. Please try again.",
+        title: "AI error",
+        description: "I couldn't understand that request. Try something like 'N1000 MTN data'.",
         variant: "destructive",
       });
     } finally {
@@ -52,13 +62,20 @@ export function AIQuickBuy() {
   const handleExecutePurchase = async () => {
     if (!user || !firestore || !userRef || !parsedResult || !profile) return;
 
-    // Check balance (Simple validation for MVP)
-    const cost = parsedResult.serviceType === 'data' ? (parsedResult.amount > 100 ? parsedResult.amount : 500) : parsedResult.amount;
+    // Calculate cost based on type and amount
+    let cost = parsedResult.amount;
+    let serviceLabel = parsedResult.serviceType === 'airtime' ? 'Airtime' : `${parsedResult.amount}GB Data`;
+
+    if (parsedResult.serviceType === 'data') {
+      // If the AI output is a small number (like 1, 2, 5), it means GB
+      const key = `${parsedResult.amount}GB`;
+      cost = PRICE_MAP[key] || (parsedResult.amount > 100 ? parsedResult.amount : 500);
+    }
     
     if (profile.balance < cost) {
       toast({
         title: "Insufficient Balance",
-        description: `You need at least ₦${cost} for this transaction.`,
+        description: `You need at least ₦${cost.toLocaleString()} for this transaction.`,
         variant: "destructive",
       });
       setParsedResult(null);
@@ -71,7 +88,8 @@ export function AIQuickBuy() {
       type: parsedResult.serviceType,
       amount: cost,
       network: parsedResult.networkProvider !== 'unknown' ? parsedResult.networkProvider : "Default",
-      recipient: parsedResult.phoneNumber || user.phoneNumber || "My Number",
+      recipient: parsedResult.phoneNumber || user.phoneNumber || "My Registered Number",
+      service: serviceLabel,
       status: "success",
       createdAt: new Date().toISOString(),
       aiGenerated: true
@@ -94,7 +112,7 @@ export function AIQuickBuy() {
       .then(() => {
         toast({
           title: "Purchase Successful!",
-          description: parsedResult.confirmationMessage,
+          description: `Successfully processed: ${serviceLabel}`,
         });
         setParsedResult(null);
       })
@@ -112,38 +130,40 @@ export function AIQuickBuy() {
 
   if (parsedResult) {
     return (
-      <Card className="border-primary bg-primary/5 shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-300 rounded-[2rem]">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-10 w-10 bg-primary rounded-2xl flex items-center justify-center text-white">
-              <Sparkles size={20} className="fill-white" />
+      <Card className="border-primary bg-primary/5 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 rounded-[2.5rem] ring-4 ring-primary/10">
+        <CardContent className="p-8">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="h-14 w-14 bg-primary rounded-[1.25rem] flex items-center justify-center text-white shadow-lg shadow-primary/20">
+              <Sparkles size={28} className="fill-white" />
             </div>
             <div>
-              <p className="text-xs font-black text-primary uppercase tracking-widest">AI Confirmation</p>
-              <h3 className="text-sm font-bold text-foreground">Is this correct?</h3>
+              <p className="text-xs font-black text-primary uppercase tracking-widest">AI Intelligence</p>
+              <h3 className="text-xl font-bold text-foreground">Confirm Request</h3>
             </div>
           </div>
           
-          <p className="text-sm text-muted-foreground mb-6 leading-relaxed italic">
-            "{parsedResult.confirmationMessage}"
-          </p>
+          <div className="bg-white/60 backdrop-blur-sm p-5 rounded-2xl mb-8 border border-primary/10">
+            <p className="text-base text-foreground font-medium leading-relaxed italic">
+              "{parsedResult.confirmationMessage}"
+            </p>
+          </div>
 
-          <div className="flex gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <Button 
-              className="flex-1 rounded-2xl h-12 font-bold shadow-md"
+              className="rounded-2xl h-16 font-black text-lg shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-95"
               onClick={handleExecutePurchase}
               disabled={isExecuting}
             >
-              {isExecuting ? <Loader2 className="animate-spin mr-2" /> : <Check className="mr-2" size={18} />}
+              {isExecuting ? <Loader2 className="animate-spin" /> : <Check className="mr-2" size={24} />}
               Confirm
             </Button>
             <Button 
               variant="outline" 
-              className="flex-1 rounded-2xl h-12 font-bold border-secondary"
+              className="rounded-2xl h-16 font-black text-lg border-2 border-secondary hover:bg-secondary/50 active:scale-95"
               onClick={() => setParsedResult(null)}
               disabled={isExecuting}
             >
-              <X className="mr-2" size={18} />
+              <X className="mr-2" size={24} />
               Cancel
             </Button>
           </div>
@@ -153,18 +173,18 @@ export function AIQuickBuy() {
   }
 
   return (
-    <Card className="border-accent bg-secondary/30 shadow-inner rounded-[2rem]">
-      <CardHeader className="pb-3 px-6">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-primary">
-          <Sparkles className="h-4 w-4 fill-primary" />
-          Fyre AI Assistant
+    <Card className="border-accent/30 bg-secondary/20 shadow-inner rounded-[2.5rem] border-2">
+      <CardHeader className="pb-3 px-8 pt-6">
+        <CardTitle className="text-xs font-black flex items-center gap-2 text-primary uppercase tracking-widest">
+          <Sparkles className="h-4 w-4 fill-primary animate-pulse" />
+          Fyre AI Instant Purchase
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-6 pb-6">
-        <form onSubmit={handleAssistantSubmit} className="relative">
+      <CardContent className="px-8 pb-8">
+        <form onSubmit={handleAssistantSubmit} className="relative group">
           <Input
-            placeholder="e.g. N1000 MTN data for 080123..."
-            className="h-14 pr-12 bg-background border-none rounded-2xl shadow-sm focus-visible:ring-primary"
+            placeholder="N1000 MTN data for 080123..."
+            className="h-16 pr-14 bg-background border-2 border-transparent focus:border-primary rounded-2xl shadow-sm text-lg font-medium transition-all"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             disabled={isLoading}
@@ -172,15 +192,29 @@ export function AIQuickBuy() {
           <Button 
             size="icon" 
             variant="ghost" 
-            className="absolute right-2 top-2 h-10 w-10 text-primary hover:text-accent rounded-xl"
+            className="absolute right-2 top-2 h-12 w-12 text-primary hover:text-white hover:bg-primary rounded-xl transition-all"
             disabled={isLoading}
           >
-            {isLoading ? <Loader2 className="animate-spin h-5 w-5" /> : <Send className="h-5 w-5" />}
+            {isLoading ? <Loader2 className="animate-spin h-6 w-6" /> : <Send className="h-6 w-6" />}
           </Button>
         </form>
-        <p className="text-[10px] text-muted-foreground mt-3 px-1 font-medium">
-          Try: <span className="text-primary font-bold">"N500 Glo airtime"</span> or <span className="text-primary font-bold">"2GB data for my number"</span>
-        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <span className="text-[10px] text-muted-foreground font-black uppercase tracking-wider self-center mr-1">Suggestions:</span>
+          <button 
+            type="button" 
+            onClick={() => setPrompt("N500 Glo airtime")}
+            className="text-[10px] font-bold bg-white px-3 py-1.5 rounded-full border border-secondary shadow-sm hover:border-primary transition-colors"
+          >
+            "N500 Glo airtime"
+          </button>
+          <button 
+            type="button" 
+            onClick={() => setPrompt("2GB MTN data for 08012345678")}
+            className="text-[10px] font-bold bg-white px-3 py-1.5 rounded-full border border-secondary shadow-sm hover:border-primary transition-colors"
+          >
+            "2GB MTN data"
+          </button>
+        </div>
       </CardContent>
     </Card>
   );

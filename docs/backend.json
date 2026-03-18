@@ -45,10 +45,12 @@
           "type": "number"
         },
         "service": {
-          "type": "string"
+          "type": "string",
+          "description": "The specific bundle or service name (e.g. 1GB Data, DStv Compact)"
         },
         "network": {
-          "type": "string"
+          "type": "string",
+          "description": "The network provider (MTN, Glo, etc.)"
         },
         "recipient": {
           "type": "string"
@@ -64,6 +66,10 @@
         "createdAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "aiGenerated": {
+          "type": "boolean",
+          "description": "Whether the transaction was initiated via the AI assistant"
         }
       },
       "required": [
@@ -82,7 +88,7 @@
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
-      "description": "User profile document. Sync comment: 2024-05-24"
+      "description": "User profile document. Sync comment: 2024-05-24-v2"
     },
     "/users/{userId}/transactions/{transactionId}": {
       "schema": "Transaction",

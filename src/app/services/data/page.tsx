@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Info, Loader2, Wifi } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Info, Loader2, Wifi, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,18 +15,19 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 const networks = [
-  { name: "MTN", color: "bg-yellow-400", logo: "M" },
-  { name: "Glo", color: "bg-green-500", logo: "G" },
-  { name: "Airtel", color: "bg-red-500", logo: "A" },
-  { name: "9mobile", color: "bg-emerald-800", logo: "9" },
+  { name: "MTN", color: "bg-yellow-400", logo: "M", textColor: "text-black" },
+  { name: "Glo", color: "bg-green-600", logo: "G", textColor: "text-white" },
+  { name: "Airtel", color: "bg-red-600", logo: "A", textColor: "text-white" },
+  { name: "9mobile", color: "bg-emerald-900", logo: "9", textColor: "text-white" },
 ];
 
 const bundles = [
-  { id: "1", label: "1GB / 30 Days", price: 350 },
-  { id: "2", label: "2GB / 30 Days", price: 650 },
-  { id: "3", label: "5GB / 30 Days", price: 1500 },
-  { id: "4", label: "10GB / 30 Days", price: 2800 },
-  { id: "5", label: "20GB / 30 Days", price: 5000 },
+  { id: "1", label: "1GB / 30 Days", price: 300, value: "1GB" },
+  { id: "2", label: "2GB / 30 Days", price: 600, value: "2GB" },
+  { id: "3", label: "5GB / 30 Days", price: 1500, value: "5GB" },
+  { id: "4", label: "10GB / 30 Days", price: 2900, value: "10GB" },
+  { id: "5", label: "20GB / 30 Days", price: 5500, value: "20GB" },
+  { id: "6", label: "40GB / 30 Days", price: 10000, value: "40GB" },
 ];
 
 export default function DataPurchase() {
@@ -49,19 +50,23 @@ export default function DataPurchase() {
   const handlePurchase = () => {
     if (!user || !firestore || !userRef) return;
     
-    if (!selectedNetwork || !phoneNumber || !selectedBundle) {
-      toast({
-        title: "Incomplete Details",
-        description: "Please select network, bundle and enter phone number.",
-        variant: "destructive",
-      });
+    if (!selectedNetwork) {
+      toast({ title: "Select Network", description: "Please choose a network provider.", variant: "destructive" });
+      return;
+    }
+    if (!phoneNumber || phoneNumber.length < 11) {
+      toast({ title: "Invalid Number", description: "Please enter a valid 11-digit phone number.", variant: "destructive" });
+      return;
+    }
+    if (!selectedBundle) {
+      toast({ title: "Select Bundle", description: "Please choose a data plan.", variant: "destructive" });
       return;
     }
 
     if (profile && profile.balance < selectedBundle.price) {
       toast({
         title: "Insufficient Balance",
-        description: "Please fund your wallet.",
+        description: `You need ₦${(selectedBundle.price - profile.balance).toLocaleString()} more to buy this bundle.`,
         variant: "destructive",
       });
       return;
@@ -79,6 +84,7 @@ export default function DataPurchase() {
       createdAt: new Date().toISOString(),
     };
 
+    // 1. Deduct balance
     updateDoc(userRef, {
       balance: increment(-selectedBundle.price)
     }).catch(async () => {
@@ -89,6 +95,7 @@ export default function DataPurchase() {
       }));
     });
 
+    // 2. Add transaction
     const transactionsRef = collection(firestore, "users", user.uid, "transactions");
     addDoc(transactionsRef, transactionData)
       .then(() => {
@@ -108,24 +115,24 @@ export default function DataPurchase() {
   if (isSuccess) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-8 text-center">
-        <div className="h-24 w-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-8 animate-in zoom-in duration-500">
-          <CheckCircle2 size={56} className="animate-bounce" />
+        <div className="h-28 w-28 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-8 animate-in zoom-in duration-500">
+          <CheckCircle2 size={64} className="animate-bounce" />
         </div>
         <h1 className="text-3xl font-black mb-3">Data Active!</h1>
-        <p className="text-muted-foreground mb-10 max-w-xs mx-auto">
-          {selectedBundle?.label} has been credited to <span className="font-bold text-foreground">{phoneNumber}</span>.
+        <p className="text-muted-foreground mb-10 max-w-xs mx-auto text-lg">
+          <span className="font-bold text-foreground">{selectedBundle?.value}</span> has been sent to <span className="font-bold text-foreground">{phoneNumber}</span> via {selectedNetwork}.
         </p>
         <div className="w-full max-w-xs space-y-4">
-          <Button className="w-full rounded-2xl h-14 text-lg font-bold shadow-lg" onClick={() => {
+          <Button className="w-full rounded-2xl h-16 text-lg font-bold shadow-xl shadow-primary/20" onClick={() => {
             setIsSuccess(false);
             setSelectedBundle(null);
             setPhoneNumber("");
           }}>
-            Buy More
+            Buy Another Bundle
           </Button>
           <Link href="/dashboard" className="block">
-            <Button variant="outline" className="w-full rounded-2xl h-14 text-lg font-bold border-secondary">
-              Go to Dashboard
+            <Button variant="outline" className="w-full rounded-2xl h-16 text-lg font-bold border-secondary">
+              Back to Dashboard
             </Button>
           </Link>
         </div>
@@ -135,28 +142,30 @@ export default function DataPurchase() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="p-6 flex items-center gap-4 sticky top-0 bg-background/80 backdrop-blur-md z-10 border-b">
+      <header className="p-6 flex items-center gap-4 sticky top-0 bg-background/80 backdrop-blur-lg z-10 border-b">
         <Link href="/dashboard">
           <Button variant="ghost" size="icon" className="rounded-full">
             <ArrowLeft size={24} />
           </Button>
         </Link>
-        <h1 className="text-xl font-black">Buy Data</h1>
+        <h1 className="text-xl font-black">Buy Data Bundles</h1>
       </header>
 
-      <main className="px-6 py-8 space-y-8 max-w-xl mx-auto">
+      <main className="px-6 py-8 space-y-8 max-w-xl mx-auto pb-24">
         <section>
-          <Label className="text-sm font-bold mb-4 block text-muted-foreground uppercase tracking-wider">Select Network</Label>
-          <div className="grid grid-cols-4 gap-4">
+          <Label className="text-xs font-black mb-4 block text-muted-foreground uppercase tracking-widest">1. Choose Network</Label>
+          <div className="grid grid-cols-4 gap-3">
             {networks.map((net) => (
               <button
                 key={net.name}
                 onClick={() => setSelectedNetwork(net.name)}
-                className={`flex flex-col items-center gap-3 p-3 rounded-3xl transition-all ${
-                  selectedNetwork === net.name ? "bg-primary/10 ring-2 ring-primary shadow-lg" : "bg-white border border-secondary shadow-sm"
+                className={`flex flex-col items-center gap-2 p-2 rounded-2xl transition-all border-2 ${
+                  selectedNetwork === net.name 
+                    ? "bg-primary/5 border-primary shadow-md scale-105" 
+                    : "bg-white border-transparent shadow-sm grayscale opacity-70 hover:grayscale-0 hover:opacity-100"
                 }`}
               >
-                <div className={`h-12 w-12 rounded-2xl ${net.color} flex items-center justify-center text-white font-black text-xl`}>
+                <div className={`h-12 w-12 rounded-xl ${net.color} flex items-center justify-center ${net.textColor} font-black text-xl shadow-sm`}>
                   {net.logo}
                 </div>
                 <span className="text-[10px] font-bold">{net.name}</span>
@@ -167,54 +176,65 @@ export default function DataPurchase() {
 
         <section className="space-y-6">
           <div className="space-y-3">
-            <Label htmlFor="phone" className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Recipient Number</Label>
-            <Input
-              id="phone"
-              type="tel"
-              placeholder="080 0000 0000"
-              className="h-16 rounded-2xl bg-white border-secondary/80 text-lg font-bold px-6 shadow-sm"
-              value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
-            />
+            <Label htmlFor="phone" className="text-xs font-black text-muted-foreground uppercase tracking-widest">2. Destination Number</Label>
+            <div className="relative">
+              <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="080 0000 0000"
+                className="h-16 rounded-2xl bg-white border-secondary text-lg font-bold pl-12 pr-6 shadow-sm focus:ring-primary"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 11))}
+              />
+            </div>
           </div>
 
           <div className="space-y-3">
-            <Label className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Select Bundle</Label>
+            <Label className="text-xs font-black text-muted-foreground uppercase tracking-widest">3. Select a Plan</Label>
             <div className="grid grid-cols-1 gap-3">
               {bundles.map((bundle) => (
                 <button
                   key={bundle.id}
                   onClick={() => setSelectedBundle(bundle)}
-                  className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                    selectedBundle?.id === bundle.id ? "border-primary bg-primary/5 shadow-md" : "border-secondary bg-white"
+                  className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all ${
+                    selectedBundle?.id === bundle.id 
+                      ? "border-primary bg-primary/5 shadow-inner" 
+                      : "border-secondary bg-white hover:border-primary/20"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <Wifi size={20} className={selectedBundle?.id === bundle.id ? "text-primary" : "text-muted-foreground"} />
+                  <div className="flex items-center gap-4">
+                    <div className={`p-2 rounded-lg ${selectedBundle?.id === bundle.id ? "bg-primary text-white" : "bg-secondary text-primary"}`}>
+                       <Wifi size={18} />
+                    </div>
                     <span className="font-bold text-sm">{bundle.label}</span>
                   </div>
-                  <span className="font-black text-primary">₦{bundle.price}</span>
+                  <span className="font-black text-lg text-primary">₦{bundle.price.toLocaleString()}</span>
                 </button>
               ))}
             </div>
           </div>
         </section>
 
-        <Card className="bg-primary/5 border-none rounded-[2rem]">
-          <CardContent className="p-6 flex gap-4 text-primary">
-            <Info size={24} className="flex-shrink-0 mt-0.5" />
-            <div className="text-sm font-medium">
-              <p>Wallet Balance: <span className="font-black">₦{profile?.balance?.toLocaleString() || "0.00"}</span></p>
+        <Card className="bg-primary/5 border-none rounded-[2rem] shadow-none">
+          <CardContent className="p-6 flex gap-4 text-primary items-center">
+            <Info size={24} className="flex-shrink-0" />
+            <div className="text-sm">
+              <p className="font-medium">Wallet Balance: <span className="font-black text-lg">₦{profile?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || "0.00"}</span></p>
             </div>
           </CardContent>
         </Card>
 
         <Button 
-          className="w-full h-16 rounded-3xl text-xl font-black shadow-2xl transition-all hover:scale-[1.02]" 
+          className="w-full h-16 rounded-3xl text-xl font-black shadow-2xl shadow-primary/30 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50" 
           onClick={handlePurchase}
           disabled={isProcessing}
         >
-          {isProcessing ? <Loader2 className="animate-spin mr-2" /> : "Purchase Data"}
+          {isProcessing ? (
+            <div className="flex items-center gap-3">
+              <Loader2 className="animate-spin" /> Provisioning...
+            </div>
+          ) : `Pay ₦${selectedBundle?.price.toLocaleString() || "0"}`}
         </Button>
       </main>
     </div>
