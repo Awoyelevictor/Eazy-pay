@@ -3,16 +3,15 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 /**
- * Firebase configuration using environment variables.
- * These are injected when you connect a real Firebase project.
+ * Firebase configuration using provided live credentials.
  */
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyDHZ4KTXXGN3w8o8qjNAvI7bKmNVzyqT-U",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "gen-lang-client-0774757450.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "gen-lang-client-0774757450",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "gen-lang-client-0774757450.firebasestorage.app",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "74718218670",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:74718218670:web:264f7b1516c8386069603f"
 };
 
 // A real API key starts with "AIza". We check for this to determine "Live" status.
@@ -21,19 +20,9 @@ export const IS_LIVE_MODE =
   firebaseConfig.apiKey !== "undefined" && 
   firebaseConfig.apiKey.startsWith("AIza");
 
-// Fallback configuration for demo purposes to prevent crashes during development
-const demoConfig = {
-  apiKey: "AIza_DEMO_KEY_PLEASE_CONNECT_PROJECT",
-  authDomain: "fyrevtu-demo.firebaseapp.com",
-  projectId: "fyrevtu-demo",
-  storageBucket: "fyrevtu-demo.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:0000000000000000000000"
-};
-
 const app = getApps().length > 0 
   ? getApp() 
-  : initializeApp(IS_LIVE_MODE ? firebaseConfig : demoConfig);
+  : initializeApp(firebaseConfig);
 
 const auth = getAuth(app);
 const db = getFirestore(app);
