@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 
 /**
  * Firebase configuration using environment variables.
- * These are injected automatically when you connect a real Firebase project.
+ * These are injected when you connect a real Firebase project.
  */
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -15,16 +15,15 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Check if we have valid production keys. 
-// A real API key starts with "AIza".
+// A real API key starts with "AIza". We check for this to determine "Live" status.
 export const IS_LIVE_MODE = 
   !!firebaseConfig.apiKey && 
   firebaseConfig.apiKey !== "undefined" && 
   firebaseConfig.apiKey.startsWith("AIza");
 
-// Fallback configuration for demo purposes to prevent crashes
+// Fallback configuration for demo purposes to prevent crashes during development
 const demoConfig = {
-  apiKey: "AIzaDemoConfig_PleaseConnectRealProject",
+  apiKey: "AIza_DEMO_KEY_PLEASE_CONNECT_PROJECT",
   authDomain: "fyrevtu-demo.firebaseapp.com",
   projectId: "fyrevtu-demo",
   storageBucket: "fyrevtu-demo.appspot.com",

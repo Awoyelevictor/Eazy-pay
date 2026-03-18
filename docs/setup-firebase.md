@@ -1,18 +1,18 @@
-# Setting up Live Firebase for FyreVTU
+# Connecting FyreVTU to Live Firebase
 
-Follow these steps to enable real authentication and wallet transactions. You are currently in the Firebase Console, but you need to register a Web App to get your keys.
+If you are seeing "API Key not valid" or "Firebase Project: undefined", follow these steps to manually connect your project.
 
-### 1. Register your Web App (CRITICAL)
-- In the [Firebase Console](https://console.firebase.google.com/), click the **Gear Icon (⚙️)** next to "Project Overview" and select **Project Settings**.
-- On the **General** tab, scroll down to the **"Your apps"** section.
-- Click the **Web icon (</>)**.
-- Give your app a nickname (e.g., "FyreVTU-Web") and click **Register app**.
-- You will see a `firebaseConfig` object. Copy the values inside it.
+### 1. Register a Web App in Firebase Console
+1. Go to your [Firebase Console](https://console.firebase.google.com/).
+2. Click the **Gear Icon (⚙️)** > **Project Settings**.
+3. Scroll down to the **"Your apps"** section and click the **Web icon (</>)**.
+4. Register the app (e.g., "FyreVTU-Web").
+5. You will see a `firebaseConfig` object. Copy those values.
 
-### 2. Configure Environment Variables
+### 2. Add Environment Variables
 Add these values to your environment variables in this IDE:
 
-| Variable Name | Value from firebaseConfig |
+| Key | Value from firebaseConfig |
 | :--- | :--- |
 | `NEXT_PUBLIC_FIREBASE_API_KEY` | `apiKey` |
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | `authDomain` |
@@ -21,9 +21,9 @@ Add these values to your environment variables in this IDE:
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | `messagingSenderId` |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | `appId` |
 
-### 3. Enable Services in Firebase Console
-- **Authentication**: Go to Build > Authentication > Get Started. Enable **Google** as a sign-in provider.
-- **Firestore Database**: Go to Build > Firestore Database > Create Database. Start in **Production Mode** and choose a location near you.
+### 3. Enable Authentication
+1. Go to **Build > Authentication** in the Firebase Console.
+2. Click **Get Started**.
+3. Enable **Google** as a Sign-in provider.
 
-### 4. Deploy Security Rules
-Once your project ID is connected, any change you save in this IDE will automatically deploy the Security Rules to your live Firebase project.
+Once you add the variables and restart the dev server, the app will automatically switch to "Live Mode".
