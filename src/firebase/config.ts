@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 
 /**
  * Production Firebase configuration.
- * Provided by user for project: gen-lang-client-0774757450
+ * Project: gen-lang-client-0774757450
  */
 const firebaseConfig = {
   apiKey: "AIzaSyDHZ4KTXXGN3w8o8qjNAvI7bKmNVzyqT-U",
@@ -19,7 +19,7 @@ const firebaseConfig = {
 // Paystack Public Key for live transactions
 export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83ace52";
 
-// App is treated as fully live
+// System is fully live
 export const IS_LIVE_MODE = true;
 
 const app = getApps().length > 0 
