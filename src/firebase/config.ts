@@ -14,6 +14,9 @@ const firebaseConfig = {
   appId: "1:74718218670:web:264f7b1516c8386069603f"
 };
 
+// Paystack Public Key for client-side transactions
+export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83ace52";
+
 // A real API key starts with "AIza". We check for this to determine "Live" status.
 export const IS_LIVE_MODE = 
   !!firebaseConfig.apiKey && 

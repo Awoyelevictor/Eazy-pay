@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -10,6 +9,13 @@ import { doc, setDoc, updateDoc, increment, collection, addDoc } from "firebase/
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useToast } from "@/hooks/use-toast";
+import { PAYSTACK_PUBLIC_KEY } from "@/firebase/config";
+
+declare global {
+  interface Window {
+    PaystackPop: any;
+  }
+}
 
 export function WalletCard() {
   const { user } = useUser();
@@ -30,7 +36,7 @@ export function WalletCard() {
       const initialData = {
         displayName: user.displayName || "User",
         email: user.email || "",
-        balance: 5000,
+        balance: 0, // Starting balance is 0 for live mode
         phoneNumber: user.phoneNumber || "",
       };
       
@@ -49,50 +55,74 @@ export function WalletCard() {
   const handleFundWallet = async () => {
     if (!user || !firestore || !userRef) return;
     
-    const amountStr = prompt("Simulated Payment Gateway: Enter amount to fund (₦)", "5000");
+    const amountStr = prompt("Enter amount to fund (₦)", "1000");
     if (!amountStr) return;
     
     const amount = parseFloat(amountStr);
-    if (isNaN(amount) || amount <= 0) {
-      toast({ title: "Invalid amount", variant: "destructive" });
+    if (isNaN(amount) || amount < 100) {
+      toast({ title: "Minimum funding is ₦100", variant: "destructive" });
       return;
     }
 
     setIsFunding(true);
-    
-    const transactionData = {
-      type: "funding",
-      amount: amount,
-      service: "Wallet Fund (Simulated)",
-      status: "success",
-      createdAt: new Date().toISOString(),
-    };
 
-    updateDoc(userRef, {
-      balance: increment(amount)
-    }).catch(async () => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: userRef.path,
-        operation: 'update',
-        requestResourceData: { balance: increment(amount) }
-      }));
-    });
+    try {
+      const handler = window.PaystackPop.setup({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: user.email,
+        amount: amount * 100, // Paystack works in kobo
+        currency: "NGN",
+        callback: function (response: any) {
+          // 1. Deduct balance in Firestore
+          updateDoc(userRef, {
+            balance: increment(amount)
+          }).catch(async () => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+              path: userRef.path,
+              operation: 'update',
+              requestResourceData: { balance: increment(amount) }
+            }));
+          });
 
-    const transactionsRef = collection(firestore, "users", user.uid, "transactions");
-    addDoc(transactionsRef, transactionData).catch(async () => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: transactionsRef.path,
-        operation: 'create',
-        requestResourceData: transactionData
-      }));
-    });
+          // 2. Add transaction record
+          const transactionData = {
+            type: "funding",
+            amount: amount,
+            service: "Wallet Fund (Paystack)",
+            status: "success",
+            createdAt: new Date().toISOString(),
+            reference: response.reference
+          };
 
-    toast({ 
-      title: "Funding Successful!", 
-      description: `₦${amount.toLocaleString()} added to your balance.`,
-      action: <div className="h-8 w-8 bg-green-500 rounded-full flex items-center justify-center text-white"><Sparkles size={16} /></div>
-    });
-    setIsFunding(false);
+          const transactionsRef = collection(firestore, "users", user.uid, "transactions");
+          addDoc(transactionsRef, transactionData).catch(async () => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+              path: transactionsRef.path,
+              operation: 'create',
+              requestResourceData: transactionData
+            }));
+          });
+
+          toast({ 
+            title: "Funding Successful!", 
+            description: `₦${amount.toLocaleString()} added to your balance.`,
+          });
+          setIsFunding(false);
+        },
+        onClose: function () {
+          setIsFunding(false);
+          toast({ title: "Payment Cancelled", variant: "destructive" });
+        },
+      });
+      handler.openIframe();
+    } catch (error) {
+      setIsFunding(false);
+      toast({ 
+        title: "Payment Error", 
+        description: "Could not initiate Paystack. Please check your internet.", 
+        variant: "destructive" 
+      });
+    }
   };
 
   const balanceFormatted = profile?.balance?.toLocaleString(undefined, {
