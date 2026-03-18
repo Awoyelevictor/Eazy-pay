@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Search, UserCircle, LogIn, AlertTriangle, ChevronRight, Zap } from "lucide-react";
+import { Bell, Search, UserCircle, Zap } from "lucide-react";
 import { WalletCard } from "@/components/dashboard/WalletCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { TransactionList } from "@/components/dashboard/TransactionList";
@@ -9,7 +9,6 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { useUser, useAuth } from "@/firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { Button } from "@/components/ui/button";
-import { IS_LIVE_MODE } from "@/firebase/config";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 
@@ -23,19 +22,11 @@ export default function DashboardPage() {
     try {
       await signInWithPopup(auth, new GoogleAuthProvider());
     } catch (error: any) {
-      if (error.code === 'auth/configuration-not-found') {
-        toast({
-          variant: "destructive",
-          title: "Sign-in Not Configured",
-          description: "Please go to Firebase Console > Authentication > Sign-in method and enable Google.",
-        });
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Login Failed",
-          description: error.message || "An unexpected error occurred during sign-in.",
-        });
-      }
+      toast({
+        variant: "destructive",
+        title: "Login Failed",
+        description: error.message || "An unexpected error occurred during sign-in. Please ensure Google Auth is enabled.",
+      });
     }
   };
 
@@ -50,23 +41,12 @@ export default function DashboardPage() {
   if (!user) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
-        {!IS_LIVE_MODE && (
-          <Link href="/setup" className="mb-8 w-full max-w-xs">
-            <div className="bg-amber-100 border border-amber-200 p-4 rounded-2xl text-amber-800 text-xs font-bold flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={16} />
-                <span>CONNECT LIVE FIREBASE</span>
-              </div>
-              <ChevronRight size={14} />
-            </div>
-          </Link>
-        )}
         <div className="h-20 w-20 bg-primary/10 rounded-3xl flex items-center justify-center text-primary mb-6 shadow-inner">
           <Zap size={40} className="fill-primary" />
         </div>
         <h1 className="text-3xl font-black mb-2">FyreVTU</h1>
         <p className="text-muted-foreground mb-8 max-w-xs font-medium">
-          Sign in to access your live wallet and instant top-ups.
+          Sign in to access your wallet and instant mobile top-ups.
         </p>
         <Button onClick={handleLogin} className="w-full max-w-xs rounded-2xl h-14 text-lg font-bold shadow-xl shadow-primary/20">
           Sign In with Google
@@ -93,11 +73,6 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {!IS_LIVE_MODE && (
-             <Link href="/setup" className="hidden sm:flex items-center gap-2 bg-amber-100 text-amber-700 px-3 py-1.5 rounded-full text-[10px] font-black mr-2">
-               DEMO MODE <ChevronRight size={12} />
-             </Link>
-          )}
           <button className="h-10 w-10 rounded-full hover:bg-secondary flex items-center justify-center transition-colors">
             <Search size={20} className="text-muted-foreground" />
           </button>
@@ -109,20 +84,6 @@ export default function DashboardPage() {
       </header>
 
       <main className="px-6 py-6 max-w-4xl mx-auto space-y-8">
-        {!IS_LIVE_MODE && (
-          <section className="sm:hidden">
-            <Link href="/setup">
-              <div className="bg-amber-100 border border-amber-200 p-4 rounded-2xl text-amber-800 text-xs font-bold flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle size={16} />
-                  <span>APP IS IN DEMO MODE - TAP TO CONNECT</span>
-                </div>
-                <ChevronRight size={14} />
-              </div>
-            </Link>
-          </section>
-        )}
-
         <section>
           <WalletCard />
         </section>

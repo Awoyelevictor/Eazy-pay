@@ -3,7 +3,7 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 /**
- * Firebase configuration using provided live credentials.
+ * Production Firebase configuration.
  */
 const firebaseConfig = {
   apiKey: "AIzaSyDHZ4KTXXGN3w8o8qjNAvI7bKmNVzyqT-U",
@@ -15,14 +15,11 @@ const firebaseConfig = {
   measurementId: "G-31S8D2K21K"
 };
 
-// Paystack Public Key for client-side transactions
+// Paystack Public Key for live transactions
 export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83ace52";
 
-// A real API key starts with "AIza". We check for this to determine "Live" status.
-export const IS_LIVE_MODE = 
-  !!firebaseConfig.apiKey && 
-  firebaseConfig.apiKey !== "undefined" && 
-  firebaseConfig.apiKey.startsWith("AIza");
+// App is treated as fully live
+export const IS_LIVE_MODE = true;
 
 const app = getApps().length > 0 
   ? getApp() 

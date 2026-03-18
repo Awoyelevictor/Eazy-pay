@@ -11,7 +11,6 @@ import {
   CheckCircle, 
   Loader2,
   Mail,
-  Smartphone,
   Key
 } from "lucide-react";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -20,8 +19,6 @@ import { Button } from "@/components/ui/button";
 import { useUser, useAuth } from "@/firebase";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { IS_LIVE_MODE } from "@/firebase/config";
-import Link from "next/link";
 
 const menuItems = [
   { icon: User, label: "Personal Information", desc: "Name, email, and basic info" },
@@ -68,7 +65,7 @@ export default function ProfilePage() {
             <h1 className="text-2xl font-black">{user.displayName || "User"}</h1>
             <p className="text-sm opacity-80">{user.email}</p>
             <div className="mt-2 inline-flex items-center px-3 py-1 rounded-full bg-white/20 text-[10px] font-bold uppercase tracking-wider">
-              {IS_LIVE_MODE ? "Verified Production Account" : "Demo Account"}
+              Production Verified Account
             </div>
           </div>
         </div>
@@ -133,25 +130,6 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
           ))}
-          
-          {!IS_LIVE_MODE && (
-            <Link href="/setup">
-              <Card className="border-2 border-amber-200 bg-amber-50 shadow-sm hover:shadow-md transition-all cursor-pointer rounded-3xl mt-4">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-700">
-                      <Settings size={22} />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-sm text-amber-900">Developer Settings</h3>
-                      <p className="text-xs text-amber-700/70">Manage Firebase project connection</p>
-                    </div>
-                  </div>
-                  <ChevronRight size={18} className="text-amber-700" />
-                </CardContent>
-              </Card>
-            </Link>
-          )}
         </div>
 
         <Button 
@@ -163,7 +141,7 @@ export default function ProfilePage() {
         </Button>
 
         <p className="text-center text-[10px] text-muted-foreground font-medium">
-          FyreVTU App v2.5.0 (Production Stable)<br/>
+          FyreVTU App v2.5.0 (Live Production)<br/>
           Securely powered by Firebase & Paystack
         </p>
       </main>
