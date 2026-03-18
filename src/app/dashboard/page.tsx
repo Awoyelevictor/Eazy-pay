@@ -1,7 +1,6 @@
-
 "use client";
 
-import { Bell, Search, UserCircle, Wifi, LogIn } from "lucide-react";
+import { Bell, Search, UserCircle, Wifi, LogIn, AlertTriangle, ChevronRight } from "lucide-react";
 import { WalletCard } from "@/components/dashboard/WalletCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { TransactionList } from "@/components/dashboard/TransactionList";
@@ -10,6 +9,8 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { useUser, useAuth } from "@/firebase";
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { Button } from "@/components/ui/button";
+import { IS_LIVE_MODE } from "@/firebase/config";
+import Link from "next/link";
 
 export default function DashboardPage() {
   const { user, loading } = useUser();
@@ -35,6 +36,17 @@ export default function DashboardPage() {
   if (!user) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
+        {!IS_LIVE_MODE && (
+          <Link href="/setup" className="mb-8 w-full max-w-xs">
+            <div className="bg-amber-100 border border-amber-200 p-4 rounded-2xl text-amber-800 text-xs font-bold flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={16} />
+                <span>CONNECT LIVE FIREBASE</span>
+              </div>
+              <ChevronRight size={14} />
+            </div>
+          </Link>
+        )}
         <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-6">
           <LogIn size={32} />
         </div>
@@ -67,6 +79,11 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {!IS_LIVE_MODE && (
+             <Link href="/setup" className="hidden sm:flex items-center gap-2 bg-amber-100 text-amber-700 px-3 py-1.5 rounded-full text-[10px] font-black mr-2">
+               DEMO MODE <ChevronRight size={12} />
+             </Link>
+          )}
           <button className="h-10 w-10 rounded-full hover:bg-secondary flex items-center justify-center transition-colors">
             <Search size={20} className="text-muted-foreground" />
           </button>
@@ -78,6 +95,20 @@ export default function DashboardPage() {
       </header>
 
       <main className="px-6 py-6 max-w-4xl mx-auto space-y-8">
+        {!IS_LIVE_MODE && (
+          <section className="sm:hidden">
+            <Link href="/setup">
+              <div className="bg-amber-100 border border-amber-200 p-4 rounded-2xl text-amber-800 text-xs font-bold flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={16} />
+                  <span>APP IS IN DEMO MODE - TAP TO CONNECT</span>
+                </div>
+                <ChevronRight size={14} />
+              </div>
+            </Link>
+          </section>
+        )}
+
         {/* Wallet Section */}
         <section>
           <WalletCard />
@@ -92,7 +123,7 @@ export default function DashboardPage() {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold">Services</h2>
-            <button className="text-primary text-sm font-medium">View all</button>
+            <Link href="/services" className="text-primary text-sm font-medium">View all</Link>
           </div>
           <QuickActions />
         </section>

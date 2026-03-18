@@ -4,11 +4,7 @@ import { getFirestore } from "firebase/firestore";
 
 /**
  * Firebase configuration using environment variables.
- * 
- * To enable LIVE mode:
- * 1. Go to your Firebase Console.
- * 2. Add a Web App to get your configuration.
- * 3. Add these values as Environment Variables in your project settings/secrets.
+ * These are set in the 'Environment Variables' section of your project settings.
  */
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -19,10 +15,10 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// A valid API key usually starts with "AIza"
-const isConfigValid = !!firebaseConfig.apiKey && firebaseConfig.apiKey.startsWith("AIza");
+// Check if we have real production keys
+export const IS_LIVE_MODE = !!firebaseConfig.apiKey && firebaseConfig.apiKey.startsWith("AIza");
 
-// Fallback configuration for development/demo purposes
+// Fallback configuration for demo purposes
 const demoConfig = {
   apiKey: "AIzaDemoConfig_PleaseConnectRealProject",
   authDomain: "fyrevtu-demo.firebaseapp.com",
@@ -34,7 +30,7 @@ const demoConfig = {
 
 const app = getApps().length > 0 
   ? getApp() 
-  : initializeApp(isConfigValid ? firebaseConfig : demoConfig);
+  : initializeApp(IS_LIVE_MODE ? firebaseConfig : demoConfig);
 
 const auth = getAuth(app);
 const db = getFirestore(app);
