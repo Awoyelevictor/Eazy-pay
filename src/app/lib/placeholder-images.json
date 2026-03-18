@@ -1,0 +1,17 @@
+
+{
+  "placeholderImages": [
+    {
+      "id": "hero-vtu",
+      "description": "Financial growth and digital efficiency",
+      "imageUrl": "https://picsum.photos/seed/fyrevtu1/1200/600",
+      "imageHint": "finance growth"
+    },
+    {
+      "id": "user-avatar",
+      "description": "User profile avatar",
+      "imageUrl": "https://picsum.photos/seed/user123/200/200",
+      "imageHint": "person avatar"
+    }
+  ]
+}
