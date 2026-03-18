@@ -1,0 +1,90 @@
+
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User account information and balance",
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "balance": {
+          "type": "number",
+          "description": "Wallet balance in NGN"
+        },
+        "phoneNumber": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "displayName",
+        "email",
+        "balance"
+      ]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "History of purchases or top-ups",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "airtime",
+            "data",
+            "funding"
+          ]
+        },
+        "amount": {
+          "type": "number"
+        },
+        "service": {
+          "type": "string"
+        },
+        "network": {
+          "type": "string"
+        },
+        "recipient": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "success",
+            "pending",
+            "failed"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "type",
+        "amount",
+        "status",
+        "createdAt"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "google.com"
+    ]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "User transaction history"
+    }
+  }
+}
