@@ -88,7 +88,7 @@
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
-      "description": "User profile document. Sync comment: 2024-05-24-v2"
+      "description": "User profile document. Sync comment: 2024-05-24-v3-production-ready"
     },
     "/users/{userId}/transactions/{transactionId}": {
       "schema": "Transaction",
