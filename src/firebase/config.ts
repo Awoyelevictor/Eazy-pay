@@ -4,6 +4,7 @@ import { getFirestore } from "firebase/firestore";
 
 /**
  * Production Firebase configuration.
+ * Provided by user for project: gen-lang-client-0774757450
  */
 const firebaseConfig = {
   apiKey: "AIzaSyDHZ4KTXXGN3w8o8qjNAvI7bKmNVzyqT-U",
