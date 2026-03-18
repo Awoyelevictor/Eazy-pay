@@ -87,7 +87,7 @@
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
-      "description": "User profile document. Status: Production v1.1.0 (Live Ready)"
+      "description": "User profile document. Status: Production v1.2.0 (Live Integrated)"
     },
     "/users/{userId}/transactions/{transactionId}": {
       "schema": "Transaction",
