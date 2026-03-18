@@ -11,17 +11,31 @@ import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { IS_LIVE_MODE } from "@/firebase/config";
 import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
 
 export default function DashboardPage() {
   const { user, loading } = useUser();
   const auth = useAuth();
+  const { toast } = useToast();
 
   const handleLogin = async () => {
     if (!auth) return;
     try {
       await signInWithPopup(auth, new GoogleAuthProvider());
-    } catch (error) {
-      console.error("Login failed", error);
+    } catch (error: any) {
+      if (error.code === 'auth/configuration-not-found') {
+        toast({
+          variant: "destructive",
+          title: "Sign-in Not Configured",
+          description: "Please go to Firebase Console > Authentication > Sign-in method and enable Google.",
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Login Failed",
+          description: error.message || "An unexpected error occurred during sign-in.",
+        });
+      }
     }
   };
 

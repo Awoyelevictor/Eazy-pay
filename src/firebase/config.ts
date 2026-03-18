@@ -6,12 +6,12 @@ import { getFirestore } from "firebase/firestore";
  * Firebase configuration using provided live credentials.
  */
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyDHZ4KTXXGN3w8o8qjNAvI7bKmNVzyqT-U",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "gen-lang-client-0774757450.firebaseapp.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "gen-lang-client-0774757450",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "gen-lang-client-0774757450.firebasestorage.app",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "74718218670",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:74718218670:web:264f7b1516c8386069603f"
+  apiKey: "AIzaSyDHZ4KTXXGN3w8o8qjNAvI7bKmNVzyqT-U",
+  authDomain: "gen-lang-client-0774757450.firebaseapp.com",
+  projectId: "gen-lang-client-0774757450",
+  storageBucket: "gen-lang-client-0774757450.firebasestorage.app",
+  messagingSenderId: "74718218670",
+  appId: "1:74718218670:web:264f7b1516c8386069603f"
 };
 
 // A real API key starts with "AIza". We check for this to determine "Live" status.
