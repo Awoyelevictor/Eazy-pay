@@ -36,7 +36,9 @@
           "enum": [
             "airtime",
             "data",
-            "funding"
+            "funding",
+            "electricity",
+            "cable"
           ]
         },
         "amount": {
@@ -80,7 +82,7 @@
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
-      "description": "User profile document"
+      "description": "User profile document. Sync comment: 2024-05-24"
     },
     "/users/{userId}/transactions/{transactionId}": {
       "schema": "Transaction",
