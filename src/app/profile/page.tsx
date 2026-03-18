@@ -1,21 +1,34 @@
-
 "use client";
 
-import { Settings, User, Shield, CreditCard, HelpCircle, LogOut, ChevronRight, CheckCircle, Loader2 } from "lucide-react";
+import { 
+  Settings, 
+  User, 
+  Shield, 
+  CreditCard, 
+  HelpCircle, 
+  LogOut, 
+  ChevronRight, 
+  CheckCircle, 
+  Loader2,
+  Mail,
+  Smartphone,
+  Key
+} from "lucide-react";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import Image from "next/image";
 import { useUser, useAuth } from "@/firebase";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import { IS_LIVE_MODE } from "@/firebase/config";
+import Link from "next/link";
 
 const menuItems = [
-  { icon: User, label: "Personal Information", desc: "Name, email, phone number" },
-  { icon: Shield, label: "Security & KYC", desc: "Level 2 Verified", status: "Verified" },
-  { icon: CreditCard, label: "Payment Methods", desc: "Manage cards and bank accounts" },
-  { icon: HelpCircle, label: "Support & Help", desc: "Chat with us, FAQs" },
-  { icon: Settings, label: "Settings", desc: "App preferences, notifications" },
+  { icon: User, label: "Personal Information", desc: "Name, email, and basic info" },
+  { icon: Shield, label: "Security & KYC", desc: "Linked account and verification", status: "Verified" },
+  { icon: CreditCard, label: "Payment Methods", desc: "Manage cards and Paystack links" },
+  { icon: HelpCircle, label: "Support & Help", desc: "FAQs and contact support" },
+  { icon: Settings, label: "Settings", desc: "Notifications and app preferences" },
 ];
 
 export default function ProfilePage() {
@@ -40,7 +53,7 @@ export default function ProfilePage() {
         </div>
         <div className="flex flex-col items-center gap-4 relative z-10">
           <div className="relative">
-            <div className="h-24 w-24 rounded-full border-4 border-white overflow-hidden bg-white/20">
+            <div className="h-24 w-24 rounded-full border-4 border-white overflow-hidden bg-white/20 shadow-2xl">
               {user.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="h-full w-full object-cover" />
               ) : (
@@ -55,14 +68,48 @@ export default function ProfilePage() {
             <h1 className="text-2xl font-black">{user.displayName || "User"}</h1>
             <p className="text-sm opacity-80">{user.email}</p>
             <div className="mt-2 inline-flex items-center px-3 py-1 rounded-full bg-white/20 text-[10px] font-bold uppercase tracking-wider">
-              Premium Account
+              {IS_LIVE_MODE ? "Verified Production Account" : "Demo Account"}
             </div>
           </div>
         </div>
       </header>
 
       <main className="px-6 py-8 space-y-6 max-w-xl mx-auto">
+        {/* Authentication Summary */}
+        <section className="space-y-3">
+          <h2 className="text-xs font-black text-muted-foreground uppercase tracking-widest px-1">Account Authentication</h2>
+          <Card className="rounded-3xl border-none shadow-sm bg-secondary/30">
+            <CardContent className="p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-primary shadow-sm">
+                    <Mail size={20} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-muted-foreground uppercase leading-none mb-1">Signed in via</p>
+                    <p className="text-sm font-bold">Google Auth</p>
+                  </div>
+                </div>
+                <div className="px-2 py-1 rounded-lg bg-green-100 text-green-700 text-[10px] font-black uppercase">Active</div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-primary shadow-sm">
+                    <Key size={20} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-muted-foreground uppercase leading-none mb-1">User ID</p>
+                    <p className="text-[10px] font-mono opacity-60 truncate max-w-[150px]">{user.uid}</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Menu Items */}
         <div className="space-y-3">
+          <h2 className="text-xs font-black text-muted-foreground uppercase tracking-widest px-1">General Settings</h2>
           {menuItems.map((item) => (
             <Card key={item.label} className="border-none shadow-sm hover:shadow-md transition-all cursor-pointer group rounded-3xl">
               <CardContent className="p-4 flex items-center justify-between">
@@ -86,18 +133,38 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
           ))}
+          
+          {!IS_LIVE_MODE && (
+            <Link href="/setup">
+              <Card className="border-2 border-amber-200 bg-amber-50 shadow-sm hover:shadow-md transition-all cursor-pointer rounded-3xl mt-4">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-700">
+                      <Settings size={22} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-amber-900">Developer Settings</h3>
+                      <p className="text-xs text-amber-700/70">Manage Firebase project connection</p>
+                    </div>
+                  </div>
+                  <ChevronRight size={18} className="text-amber-700" />
+                </CardContent>
+              </Card>
+            </Link>
+          )}
         </div>
 
         <Button 
           variant="destructive" 
-          className="w-full h-14 rounded-3xl gap-2 font-bold shadow-lg shadow-red-100"
+          className="w-full h-16 rounded-3xl gap-2 font-black text-lg shadow-xl shadow-red-100 mt-4 transition-transform active:scale-95"
           onClick={handleSignOut}
         >
-          <LogOut size={20} /> Sign Out
+          <LogOut size={22} /> Sign Out
         </Button>
 
-        <p className="text-center text-[10px] text-muted-foreground">
-          FyreVTU App v2.4.0 (Build 2024.1)
+        <p className="text-center text-[10px] text-muted-foreground font-medium">
+          FyreVTU App v2.5.0 (Production Stable)<br/>
+          Securely powered by Firebase & Paystack
         </p>
       </main>
 

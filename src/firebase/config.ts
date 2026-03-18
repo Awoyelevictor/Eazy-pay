@@ -11,7 +11,8 @@ const firebaseConfig = {
   projectId: "gen-lang-client-0774757450",
   storageBucket: "gen-lang-client-0774757450.firebasestorage.app",
   messagingSenderId: "74718218670",
-  appId: "1:74718218670:web:264f7b1516c8386069603f"
+  appId: "1:74718218670:web:264f7b1516c8386069603f",
+  measurementId: "G-31S8D2K21K"
 };
 
 // Paystack Public Key for client-side transactions
