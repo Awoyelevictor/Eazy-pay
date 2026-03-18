@@ -1,15 +1,15 @@
-
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+// The values are typically provided by environment variables in production
 const firebaseConfig = {
-  apiKey: "AIzaSy...", // Placeholder: Real config is injected by the environment
-  authDomain: "fyrevtu.firebaseapp.com",
-  projectId: "fyrevtu",
-  storageBucket: "fyrevtu.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSy_PLACEHOLDER",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "fyrevtu.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "fyrevtu",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "fyrevtu.appspot.com",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "123456789",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:123456789:web:abcdef"
 };
 
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);

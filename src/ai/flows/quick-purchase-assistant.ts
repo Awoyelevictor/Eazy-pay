@@ -11,7 +11,7 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const QuickPurchaseAssistantInputSchema = z.object({
-  naturalLanguagePrompt: z.string().describe('A natural language request from the user for a purchase, e.g., "N1000 MTN data for my registered number".'),
+  naturalLanguagePrompt: z.string().min(1).describe('A natural language request from the user for a purchase, e.g., "N1000 MTN data for my registered number".'),
 });
 export type QuickPurchaseAssistantInput = z.infer<typeof QuickPurchaseAssistantInputSchema>;
 
@@ -25,6 +25,10 @@ const QuickPurchaseAssistantOutputSchema = z.object({
 export type QuickPurchaseAssistantOutput = z.infer<typeof QuickPurchaseAssistantOutputSchema>;
 
 export async function quickPurchaseAssistant(input: QuickPurchaseAssistantInput): Promise<QuickPurchaseAssistantOutput> {
+  // Validate input before calling the flow to avoid Genkit/Gemini trimEnd errors on empty strings
+  if (!input.naturalLanguagePrompt || input.naturalLanguagePrompt.trim().length === 0) {
+    throw new Error('Prompt cannot be empty');
+  }
   return quickPurchaseAssistantFlow(input);
 }
 
@@ -88,6 +92,7 @@ const quickPurchaseAssistantFlow = ai.defineFlow(
   },
   async (input) => {
     const {output} = await quickPurchaseAssistantPrompt(input);
-    return output!;
+    if (!output) throw new Error('AI failed to generate a response');
+    return output;
   }
 );
