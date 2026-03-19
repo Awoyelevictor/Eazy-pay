@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "UserProfile": {
@@ -37,7 +38,8 @@
             "data",
             "funding",
             "electricity",
-            "cable"
+            "cable",
+            "games"
           ]
         },
         "amount": {
@@ -45,14 +47,15 @@
         },
         "service": {
           "type": "string",
-          "description": "The specific bundle or service name (e.g. 1GB Data, DStv Compact)"
+          "description": "The specific bundle or service name (e.g. 1GB Data, DStv Compact, 80 CP)"
         },
         "network": {
           "type": "string",
-          "description": "The network provider (MTN, Glo, etc.)"
+          "description": "The network provider or game title (MTN, Glo, Free Fire, etc.)"
         },
         "recipient": {
-          "type": "string"
+          "type": "string",
+          "description": "Phone number, Meter number, or Player ID"
         },
         "status": {
           "type": "string",
@@ -87,7 +90,7 @@
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
-      "description": "User profile document. Status: Live Production v1.4.0 (Auth Fully Active)"
+      "description": "User profile document. Status: Live Production v1.5.0 (Eazy-pay Active)"
     },
     "/users/{userId}/transactions/{transactionId}": {
       "schema": "Transaction",

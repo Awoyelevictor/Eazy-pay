@@ -2,16 +2,16 @@
 "use client";
 
 import Link from "next/link";
-import { Smartphone, Wifi, Tv, Zap, ShieldCheck, CreditCard } from "lucide-react";
+import { Smartphone, Wifi, Tv, Zap, ShieldCheck, Gamepad2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const actions = [
   { icon: Smartphone, label: "Airtime", href: "/services/airtime", color: "bg-blue-100 text-blue-600" },
   { icon: Wifi, label: "Data", href: "/services/data", color: "bg-green-100 text-green-600" },
+  { icon: Gamepad2, label: "Games", href: "/services/games", color: "bg-orange-100 text-orange-600" },
   { icon: Tv, label: "Cable TV", href: "/services/cable", color: "bg-purple-100 text-purple-600" },
   { icon: Zap, label: "Electricity", href: "/services/electricity", color: "bg-yellow-100 text-yellow-600" },
   { icon: ShieldCheck, label: "Insurance", href: "/services/insurance", color: "bg-red-100 text-red-600" },
-  { icon: CreditCard, label: "Gift Cards", href: "/services/gift-cards", color: "bg-orange-100 text-orange-600" },
 ];
 
 export function QuickActions() {

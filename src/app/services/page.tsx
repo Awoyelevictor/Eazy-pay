@@ -11,7 +11,8 @@ import {
   CreditCard, 
   ArrowLeft,
   Search,
-  ChevronRight
+  ChevronRight,
+  Gamepad2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,17 +28,23 @@ const services = [
     ]
   },
   { 
+    category: "Entertainment & Gaming",
+    items: [
+      { icon: Gamepad2, label: "Game Top-up", desc: "COD, Free Fire, Bloodstrike", href: "/services/games", color: "bg-orange-500" },
+      { icon: Tv, label: "Cable TV", desc: "DStv, GOtv, and StarTimes", href: "/services/cable", color: "bg-purple-500" },
+    ]
+  },
+  { 
     category: "Utilities",
     items: [
       { icon: Zap, label: "Electricity", desc: "Prepaid and Postpaid meters", href: "/services/electricity", color: "bg-yellow-500" },
-      { icon: Tv, label: "Cable TV", desc: "DStv, GOtv, and StarTimes", href: "/services/cable", color: "bg-purple-500" },
     ]
   },
   { 
     category: "Others",
     items: [
       { icon: ShieldCheck, label: "Insurance", desc: "Vehicle and health coverage", href: "/services/insurance", color: "bg-red-500" },
-      { icon: CreditCard, label: "Gift Cards", desc: "Global store vouchers", href: "/services/gift-cards", color: "bg-orange-500" },
+      { icon: CreditCard, label: "Gift Cards", desc: "Global store vouchers", href: "/services/gift-cards", color: "bg-emerald-500" },
     ]
   }
 ];
@@ -94,7 +101,7 @@ export default function ServicesPage() {
 
         <div className="bg-primary/5 rounded-[2rem] p-8 text-center border-2 border-dashed border-primary/20">
           <p className="text-sm font-bold text-primary mb-2">Can't find what you need?</p>
-          <p className="text-xs text-muted-foreground mb-4">We're constantly adding new utility providers and services.</p>
+          <p className="text-xs text-muted-foreground mb-4">We're constantly adding new games and utility providers.</p>
           <Button variant="link" className="text-primary font-black">Suggest a Service</Button>
         </div>
       </main>

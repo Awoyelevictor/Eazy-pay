@@ -1,3 +1,4 @@
+
 "use client";
 
 import { 
@@ -141,7 +142,7 @@ export default function ProfilePage() {
         </Button>
 
         <p className="text-center text-[10px] text-muted-foreground font-medium">
-          FyreVTU App v2.5.0 (Live Production)<br/>
+          Eazy-pay App v2.6.0 (Live Production)<br/>
           Securely powered by Firebase & Paystack
         </p>
       </main>

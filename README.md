@@ -1,6 +1,7 @@
-# FyreVTU - Eazy-pay
 
-A high-performance virtual top-up (VTU) application built with Next.js, Firebase, and Paystack.
+# Eazy-pay
+
+A high-performance virtual top-up (VTU) and gaming credits application built with Next.js, Firebase, and Paystack.
 
 ## Deployment Instructions
 
@@ -17,6 +18,7 @@ git push -u origin main
 
 ## Features
 - **Instant Top-up**: Airtime and Data for all major networks.
+- **Gaming Credits**: Instant top-up for CODM, Free Fire, and Bloodstrike.
 - **Utility Bills**: Electricity and Cable TV subscriptions.
 - **AI Assistant**: Natural language parsing for quick purchases.
 - **Live Payments**: Integrated with Paystack for secure wallet funding.
