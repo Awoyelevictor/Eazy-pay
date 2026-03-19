@@ -3,7 +3,7 @@
   "entities": {
     "UserProfile": {
       "title": "User Profile",
-      "description": "User account information and balance",
+      "description": "User account information, balance, and security PIN",
       "type": "object",
       "properties": {
         "displayName": {
@@ -18,12 +18,20 @@
         },
         "phoneNumber": {
           "type": "string"
+        },
+        "transactionPin": {
+          "type": "string",
+          "description": "4-6 digit security PIN for transactions and login"
+        },
+        "isVerified": {
+          "type": "boolean",
+          "description": "Whether the user has verified their email/OTP"
         }
       },
       "required": [
-        "displayName",
         "email",
-        "balance"
+        "balance",
+        "transactionPin"
       ]
     },
     "Transaction": {
@@ -47,15 +55,13 @@
         },
         "service": {
           "type": "string",
-          "description": "The specific bundle or service name (e.g. 1GB Data, DStv Compact, 80 CP)"
+          "description": "The specific bundle or service name"
         },
         "network": {
-          "type": "string",
-          "description": "The network provider or game title (MTN, Glo, Free Fire, etc.)"
+          "type": "string"
         },
         "recipient": {
-          "type": "string",
-          "description": "Phone number, Meter number, or Player ID"
+          "type": "string"
         },
         "status": {
           "type": "string",
@@ -70,8 +76,7 @@
           "format": "date-time"
         },
         "aiGenerated": {
-          "type": "boolean",
-          "description": "Whether the transaction was initiated via the AI assistant"
+          "type": "boolean"
         }
       },
       "required": [
@@ -84,13 +89,13 @@
   },
   "auth": {
     "providers": [
-      "google.com"
+      "password"
     ]
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
-      "description": "User profile document. Status: Live Production v1.5.0 (Eazy-pay Active)"
+      "description": "User profile with balance and PIN security"
     },
     "/users/{userId}/transactions/{transactionId}": {
       "schema": "Transaction",
