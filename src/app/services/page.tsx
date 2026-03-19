@@ -38,12 +38,12 @@ const services = [
     category: "Utilities",
     items: [
       { icon: Zap, label: "Electricity", desc: "Prepaid and Postpaid meters", href: "/services/electricity", color: "bg-yellow-500" },
+      { icon: ShieldCheck, label: "Third Party Insurance", desc: "Motor vehicle coverage certificate", href: "/services/insurance", color: "bg-red-500" },
     ]
   },
   { 
     category: "Others",
     items: [
-      { icon: ShieldCheck, label: "Insurance", desc: "Vehicle and health coverage", href: "/services/insurance", color: "bg-red-500" },
       { icon: CreditCard, label: "Gift Cards", desc: "Global store vouchers", href: "/services/gift-cards", color: "bg-emerald-500" },
     ]
   }
