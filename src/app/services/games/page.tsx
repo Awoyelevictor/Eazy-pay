@@ -19,6 +19,7 @@ import { createAINotification } from "@/services/notification-service";
 const gameProviders = [
   { name: "Call of Duty Mobile (Global)", shagoId: "CODM", icon: Gamepad2 },
   { name: "Free Fire (Diamonds)", shagoId: "FREEFIRE", icon: Gamepad2 },
+  { name: "Bloodstrike", shagoId: "BLOODSTRIKE", icon: Gamepad2 },
   { name: "Mobile Legends", shagoId: "MOBILE_LEGENDS", icon: Gamepad2 },
   { name: "PUBG Mobile", shagoId: "PUBG", icon: Gamepad2 },
 ];

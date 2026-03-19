@@ -1,3 +1,4 @@
+
 'use client';
 
 import { 
@@ -19,17 +20,21 @@ import { FirestorePermissionError } from '@/firebase/errors';
  */
 export async function getGlobalStats(db: Firestore) {
   try {
+    // 1. Fetch all users - This is usually where the permission error happens if rules are restricted.
     const usersSnap = await getDocs(collection(db, 'users')).catch(async (err) => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
+      // If we can't list users, it's a security rule violation for an admin.
+      const permissionError = new FirestorePermissionError({
         path: 'users',
         operation: 'list'
-      }));
+      });
+      errorEmitter.emit('permission-error', permissionError);
       throw err;
     });
 
     const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     
     if (users.length === 0) {
+      console.log("Admin: No users found in the system.");
       return {
         userCount: 0,
         transactionCount: 0,
@@ -44,7 +49,7 @@ export async function getGlobalStats(db: Firestore) {
     let totalBalance = 0;
     const allTransactions: any[] = [];
     
-    // Fetch all transactions in parallel
+    // 2. Fetch all transactions in parallel for each found user
     const transactionPromises = users.map(async (user) => {
       const userData = user as any;
       totalBalance += Number(userData.balance) || 0;
@@ -55,7 +60,7 @@ export async function getGlobalStats(db: Firestore) {
         allTransactions.push(...userTxs);
       } catch (e) {
         // Log individual user fetch failures silently to let the rest of the dashboard load
-        console.warn(`Admin: Could not fetch transactions for user ${user.id}`);
+        console.warn(`Admin: Could not fetch transactions for user ${user.id} - check rules for /users/{userId}/transactions`);
       }
     });
 
@@ -78,6 +83,7 @@ export async function getGlobalStats(db: Firestore) {
     };
   } catch (error: any) {
     console.error("Global Stats Fetch Error:", error);
+    // Re-throw so the UI knows to show the error state
     throw error;
   }
 }
@@ -90,9 +96,14 @@ export async function broadcastGlobalNotification(
   description: string,
   adminName: string
 ) {
-  const usersSnap = await getDocs(collection(db, 'users'));
-  const promises = usersSnap.docs.map(u => 
-    createAINotification(db, u.id, `Announcement from Admin ${adminName}: ${description}`, 'Eazy-pay User')
-  );
-  await Promise.all(promises);
+  try {
+    const usersSnap = await getDocs(collection(db, 'users'));
+    const promises = usersSnap.docs.map(u => 
+      createAINotification(db, u.id, description, u.data().displayName || 'User', '')
+    );
+    await Promise.all(promises);
+  } catch (err) {
+    console.error("Admin: Broadcast failed", err);
+    throw err;
+  }
 }
