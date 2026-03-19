@@ -1,4 +1,3 @@
-
 'use client';
 
 import { 
@@ -16,13 +15,12 @@ import { FirestorePermissionError } from '@/firebase/errors';
 
 /**
  * Fetch aggregated statistics for the admin dashboard.
- * Optimized to aggregate data across all users and handle permission errors.
+ * Optimized to handle large datasets and security rule restrictions.
  */
 export async function getGlobalStats(db: Firestore) {
   try {
-    // 1. Fetch all users - This is usually where the permission error happens if rules are restricted.
+    // 1. Fetch all users
     const usersSnap = await getDocs(collection(db, 'users')).catch(async (err) => {
-      // If we can't list users, it's a security rule violation for an admin.
       const permissionError = new FirestorePermissionError({
         path: 'users',
         operation: 'list'
@@ -34,7 +32,6 @@ export async function getGlobalStats(db: Firestore) {
     const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     
     if (users.length === 0) {
-      console.log("Admin: No users found in the system.");
       return {
         userCount: 0,
         transactionCount: 0,
@@ -49,18 +46,16 @@ export async function getGlobalStats(db: Firestore) {
     let totalBalance = 0;
     const allTransactions: any[] = [];
     
-    // 2. Fetch all transactions in parallel for each found user
-    const transactionPromises = users.map(async (user) => {
-      const userData = user as any;
-      totalBalance += Number(userData.balance) || 0;
+    // 2. Fetch all transactions for all users in parallel
+    const transactionPromises = users.map(async (user: any) => {
+      totalBalance += Number(user.balance) || 0;
       
       try {
         const txSnap = await getDocs(collection(db, 'users', user.id, 'transactions'));
         const userTxs = txSnap.docs.map(d => ({ id: d.id, userId: user.id, ...d.data() }));
         allTransactions.push(...userTxs);
       } catch (e) {
-        // Log individual user fetch failures silently to let the rest of the dashboard load
-        console.warn(`Admin: Could not fetch transactions for user ${user.id} - check rules for /users/{userId}/transactions`);
+        console.warn(`Admin: Could not fetch transactions for user ${user.id}`);
       }
     });
 
@@ -83,7 +78,6 @@ export async function getGlobalStats(db: Firestore) {
     };
   } catch (error: any) {
     console.error("Global Stats Fetch Error:", error);
-    // Re-throw so the UI knows to show the error state
     throw error;
   }
 }

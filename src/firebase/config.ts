@@ -1,4 +1,3 @@
-
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
@@ -20,7 +19,7 @@ const firebaseConfig = {
 export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83ace52";
 
 /** 
- * VTPASS API CONFIGURATION
+ * VTPASS API CONFIGURATION (Airtime, Data, Utilities)
  */
 export const VTU_CONFIG = {
   API_KEY: "384e1cf92f291f8bf76dc271e7b9f7fe",
@@ -30,19 +29,19 @@ export const VTU_CONFIG = {
 };
 
 /**
- * SHAGO PAYMENTS CONFIGURATION (For Gaming)
+ * PAY1ST / CARRY1ST GATEWAY CONFIGURATION (Specifically for Gaming)
+ */
+export const PAY1ST_CONFIG = {
+  API_KEY: "PAY1ST_API_KEY_HERE",
+  BASE_URL: "https://api.carry1st.com/v1", // Using Carry1st Shop Gateway as requested
+};
+
+/**
+ * SHAGO PAYMENTS CONFIGURATION (Fallback)
  */
 export const SHAGO_CONFIG = {
   HASH_KEY: "SHAGO_HASH_KEY_HERE", 
   BASE_URL: "https://api.shagopayments.com/public/api/v2",
-};
-
-/**
- * PAY1ST CONFIGURATION (Alternative VTU)
- */
-export const PAY1ST_CONFIG = {
-  API_KEY: "PAY1ST_API_KEY_HERE",
-  BASE_URL: "https://pay1st.com.ng/api",
 };
 
 const app = getApps().length > 0 
