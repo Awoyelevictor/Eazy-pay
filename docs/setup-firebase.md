@@ -1,3 +1,4 @@
+
 # Connecting Eazy-pay to Live Firebase
 
 If you are seeing "API Key not valid" or "Firebase: Error (auth/operation-not-allowed)", follow these steps to manually connect your project.

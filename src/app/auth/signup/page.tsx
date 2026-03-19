@@ -11,12 +11,14 @@ import {
   ArrowRight, 
   Loader2, 
   CheckCircle2,
-  Smartphone
+  Smartphone,
+  AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth, useFirestore } from "@/firebase";
 import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
@@ -25,13 +27,13 @@ import { useToast } from "@/hooks/use-toast";
 export default function SignupPage() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     confirmPassword: "",
     displayName: "",
     pin: "",
-    otp: ""
   });
   
   const auth = useAuth();
@@ -40,6 +42,7 @@ export default function SignupPage() {
   const { toast } = useToast();
 
   const handleNextStep = () => {
+    setErrorMessage(null);
     if (step === 1) {
       if (!formData.email || !formData.password || formData.password !== formData.confirmPassword) {
         toast({ title: "Check inputs", description: "Ensure passwords match and fields are filled.", variant: "destructive" });
@@ -58,6 +61,7 @@ export default function SignupPage() {
   const handleSignup = async () => {
     if (!auth || !firestore) return;
     setLoading(true);
+    setErrorMessage(null);
 
     try {
       // 1. Create Auth User
@@ -86,7 +90,8 @@ export default function SignupPage() {
     } catch (error: any) {
       let message = error.message;
       if (error.code === 'auth/operation-not-allowed') {
-        message = "Email/Password sign-in is not enabled in the Firebase Console. Please go to Authentication > Sign-in method and enable it.";
+        message = "Email/Password sign-in is not enabled. Please go to your Firebase Console > Authentication > Sign-in method and enable 'Email/Password'.";
+        setErrorMessage(message);
       }
       
       toast({
@@ -104,8 +109,19 @@ export default function SignupPage() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <h1 className="text-3xl font-black text-foreground">Join Eazy-pay</h1>
-          <p className="text-muted-foreground mt-2">Secure mobile & game top-ups</p>
+          <p className="text-muted-foreground mt-2 text-sm">Secure mobile & game top-ups</p>
         </div>
+
+        {errorMessage && (
+          <Alert variant="destructive" className="rounded-2xl border-2 animate-in fade-in slide-in-from-top-2">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Configuration Required</AlertTitle>
+            <AlertDescription className="text-xs">
+              {errorMessage}
+              <Link href="/setup" className="block mt-2 font-bold underline">Open Setup Guide</Link>
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="flex justify-between mb-8 px-4 relative">
           <div className="absolute top-1/2 left-0 w-full h-0.5 bg-secondary -translate-y-1/2 z-0" />
@@ -176,44 +192,45 @@ export default function SignupPage() {
                   <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mx-auto mb-4">
                     <ShieldCheck size={32} />
                   </div>
-                  <h3 className="text-xl font-bold">Create Transaction PIN</h3>
-                  <p className="text-xs text-muted-foreground">Used for logins and confirming purchases.</p>
+                  <h3 className="text-xl font-bold">Create Security PIN</h3>
+                  <p className="text-xs text-muted-foreground">Used to log in and authorize payments.</p>
                 </div>
                 <div className="space-y-2">
-                  <Label>Security PIN (4-6 digits)</Label>
+                  <Label className="text-center block mb-4 uppercase tracking-widest text-[10px] font-black opacity-60">Enter 4-6 Digits</Label>
                   <Input 
                     type="password" 
-                    placeholder="1234"
+                    placeholder="••••"
                     maxLength={6}
-                    className="h-16 text-center text-3xl tracking-[1rem] font-black rounded-2xl bg-secondary/30 border-none"
+                    autoFocus
+                    className="h-20 text-center text-4xl tracking-[1.5rem] font-black rounded-3xl bg-secondary/30 border-none shadow-inner"
                     value={formData.pin}
                     onChange={(e) => setFormData({...formData, pin: e.target.value.replace(/\D/g, '')})}
                   />
                 </div>
-                <Button onClick={handleNextStep} className="w-full h-14 rounded-2xl font-bold text-lg">
+                <Button onClick={handleNextStep} className="w-full h-16 rounded-3xl font-bold text-lg" disabled={formData.pin.length < 4}>
                   Set PIN <ArrowRight className="ml-2" size={20} />
                 </Button>
-                <button onClick={() => setStep(1)} className="w-full text-sm text-muted-foreground font-medium">Back to basic info</button>
+                <button onClick={() => setStep(1)} className="w-full text-sm text-muted-foreground font-medium">Back to email</button>
               </div>
             )}
 
             {step === 3 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                <div className="text-center mb-6">
-                  <div className="h-16 w-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mx-auto mb-4">
-                    <Smartphone size={32} />
-                  </div>
-                  <h3 className="text-xl font-bold">Verification</h3>
-                  <p className="text-xs text-muted-foreground">We'll send a link to {formData.email}.</p>
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 text-center">
+                <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center text-primary mx-auto mb-4">
+                  <CheckCircle2 size={40} />
                 </div>
+                <h3 className="text-xl font-bold">Ready to Launch</h3>
+                <p className="text-sm text-muted-foreground">
+                  We'll send a verification link to <span className="font-bold text-foreground">{formData.email}</span>.
+                </p>
                 <Button 
                   onClick={handleSignup} 
-                  className="w-full h-14 rounded-2xl font-bold text-lg"
+                  className="w-full h-16 rounded-3xl font-black text-xl shadow-xl shadow-primary/20"
                   disabled={loading}
                 >
-                  {loading ? <Loader2 className="animate-spin" /> : "Complete Signup"}
+                  {loading ? <Loader2 className="animate-spin" /> : "Verify & Create Account"}
                 </Button>
-                <button onClick={() => setStep(2)} className="w-full text-sm text-muted-foreground font-medium">Back to PIN setup</button>
+                <button onClick={() => setStep(2)} className="w-full text-sm text-muted-foreground font-medium">Change PIN</button>
               </div>
             )}
           </CardContent>
