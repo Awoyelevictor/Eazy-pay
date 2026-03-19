@@ -47,7 +47,8 @@
             "funding",
             "electricity",
             "cable",
-            "games"
+            "games",
+            "insurance"
           ]
         },
         "amount": {
@@ -85,6 +86,45 @@
         "status",
         "createdAt"
       ]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notification messages",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "info",
+            "success",
+            "warning",
+            "error"
+          ]
+        },
+        "read": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "actionUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "message",
+        "type",
+        "read",
+        "createdAt"
+      ]
     }
   },
   "auth": {
@@ -100,6 +140,10 @@
     "/users/{userId}/transactions/{transactionId}": {
       "schema": "Transaction",
       "description": "User transaction history"
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notification messages"
     }
   }
 }

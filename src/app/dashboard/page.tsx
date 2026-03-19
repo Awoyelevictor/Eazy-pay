@@ -13,6 +13,7 @@ import { useUser } from "@/firebase";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
+import { NotificationDrawer } from "@/components/notifications/NotificationDrawer";
 
 export default function DashboardPage() {
   const { user, loading } = useUser();
@@ -75,10 +76,7 @@ export default function DashboardPage() {
           <button className="h-10 w-10 rounded-full hover:bg-secondary flex items-center justify-center transition-colors">
             <Search size={20} className="text-muted-foreground" />
           </button>
-          <button className="h-10 w-10 rounded-full hover:bg-secondary flex items-center justify-center transition-colors relative">
-            <Bell size={20} className="text-muted-foreground" />
-            <span className="absolute top-2.5 right-2.5 h-2 w-2 bg-red-500 rounded-full border-2 border-background" />
-          </button>
+          <NotificationDrawer />
         </div>
       </header>
 

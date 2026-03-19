@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -10,6 +11,7 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { useToast } from "@/hooks/use-toast";
 import { PAYSTACK_PUBLIC_KEY } from "@/firebase/config";
+import { createAINotification } from "@/services/notification-service";
 
 declare global {
   interface Window {
@@ -36,7 +38,7 @@ export function WalletCard() {
       const initialData = {
         displayName: user.displayName || "User",
         email: user.email || "",
-        balance: 0, // Starting balance is 0 for live mode
+        balance: 0,
         phoneNumber: user.phoneNumber || "",
       };
       
@@ -49,6 +51,9 @@ export function WalletCard() {
           });
           errorEmitter.emit('permission-error', permissionError);
         });
+      
+      // Notify about account activation
+      createAINotification(firestore, user.uid, "Welcome to Eazy-pay! Your wallet is now active.", user.displayName || '');
     }
   }, [user, profile, loading, firestore, userRef]);
 
@@ -102,6 +107,14 @@ export function WalletCard() {
               requestResourceData: transactionData
             }));
           });
+
+          // 3. Create AI Notification
+          createAINotification(
+            firestore, 
+            user.uid, 
+            `Successfully funded wallet with NGN ${amount.toLocaleString()}`,
+            user.displayName || ''
+          );
 
           toast({ 
             title: "Funding Successful!", 

@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
 import { processPayment } from "@/app/actions/vtpass";
+import { createAINotification } from "@/services/notification-service";
 
 const networks = [
   { name: "MTN", color: "bg-yellow-400", logo: "M", vtuId: "mtn" },
@@ -37,9 +38,6 @@ export default function AirtimePurchase() {
 
   const { data: profile } = useDoc(userRef);
 
-  /**
-   * Generates a unique request_id as per VTpass documentation
-   */
   const generateRequestId = () => {
     const now = new Date();
     const dateStr = now.getFullYear() + 
@@ -75,7 +73,6 @@ export default function AirtimePurchase() {
     try {
       const requestId = generateRequestId();
       
-      // CALL VTPASS SERVER ACTION
       const result = await processPayment({
         request_id: requestId,
         serviceID: selectedNetwork.vtuId,
@@ -83,12 +80,10 @@ export default function AirtimePurchase() {
         phone: phoneNumber
       });
 
-      // Response code "000" means success in VTpass
       if (result.code !== '000') {
         throw new Error(result.response_description || "Transaction failed");
       }
 
-      // 1. Record transaction in Firestore
       const transactionData = {
         type: "airtime",
         amount: purchaseAmount,
@@ -99,11 +94,18 @@ export default function AirtimePurchase() {
         createdAt: new Date().toISOString(),
       };
 
-      // 2. Deduct balance and add history
       await updateDoc(userRef, { balance: increment(-purchaseAmount) });
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
       
+      // Notify user with AI message
+      createAINotification(
+        firestore, 
+        user.uid, 
+        `Successfully purchased NGN ${purchaseAmount} ${selectedNetwork.name} airtime for ${phoneNumber}`,
+        user.displayName || ''
+      );
+
       setIsSuccess(true);
     } catch (error: any) {
       toast({
@@ -111,6 +113,14 @@ export default function AirtimePurchase() {
         description: error.message,
         variant: "destructive"
       });
+      
+      // Notify about failure
+      createAINotification(
+        firestore, 
+        user.uid, 
+        `Airtime purchase of NGN ${amount} failed: ${error.message}`,
+        user.displayName || ''
+      );
     } finally {
       setIsProcessing(false);
     }
