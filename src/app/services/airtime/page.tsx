@@ -16,16 +16,16 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { VTU_CONFIG } from "@/firebase/config";
 
 const networks = [
-  { name: "MTN", color: "bg-yellow-400", logo: "M" },
-  { name: "Glo", color: "bg-green-500", logo: "G" },
-  { name: "Airtel", color: "bg-red-500", logo: "A" },
-  { name: "9mobile", color: "bg-emerald-800", logo: "9" },
+  { name: "MTN", color: "bg-yellow-400", logo: "M", vtuId: "mtn" },
+  { name: "Glo", color: "bg-green-500", logo: "G", vtuId: "glo" },
+  { name: "Airtel", color: "bg-red-500", logo: "A", vtuId: "airtel" },
+  { name: "9mobile", color: "bg-emerald-800", logo: "9", vtuId: "etisalat" },
 ];
 
 export default function AirtimePurchase() {
   const { user } = useUser();
   const firestore = useFirestore();
-  const [selectedNetwork, setSelectedNetwork] = useState("");
+  const [selectedNetwork, setSelectedNetwork] = useState<typeof networks[0] | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -38,6 +38,16 @@ export default function AirtimePurchase() {
   }, [firestore, user]);
 
   const { data: profile } = useDoc(userRef);
+
+  // Helper to generate VTpass compliant request_id (YYYYMMDDHHIIxxxx)
+  const generateRequestId = () => {
+    const now = new Date();
+    const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
+    const hourPart = now.getHours().toString().padStart(2, "0");
+    const minPart = now.getMinutes().toString().padStart(2, "0");
+    const randomPart = Math.random().toString(36).substring(2, 10);
+    return `${datePart}${hourPart}${minPart}${randomPart}`;
+  };
 
   const handlePurchase = async () => {
     if (!user || !firestore || !userRef) return;
@@ -73,24 +83,44 @@ export default function AirtimePurchase() {
     setIsProcessing(true);
 
     try {
-      /**
-       * REAL VTU API INTEGRATION POINT
-       * Replace this timeout with a real fetch call once you have an API key.
-       * See docs/vtu-integration.md for an example.
-       */
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const requestId = generateRequestId();
+      
+      // REAL VTPASS API CALL
+      // Note: In a production environment, this should be handled via a proxy/server action to hide API keys
+      const response = await fetch(`${VTU_CONFIG.BASE_URL}/pay`, {
+        method: 'POST',
+        headers: {
+          'api-key': VTU_CONFIG.API_KEY,
+          'public-key': VTU_CONFIG.PUBLIC_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          request_id: requestId,
+          serviceID: selectedNetwork.vtuId,
+          amount: purchaseAmount,
+          phone: phoneNumber
+        })
+      });
+
+      const result = await response.json();
+
+      // VTpass code "000" is success
+      if (result.code !== '000') {
+        throw new Error(result.response_description || "Transaction failed at VTpass gateway");
+      }
 
       const transactionData = {
         type: "airtime",
         amount: purchaseAmount,
-        network: selectedNetwork,
+        network: selectedNetwork.name,
         recipient: phoneNumber,
         status: "success",
-        deliveryStatus: VTU_CONFIG.API_KEY === "YOUR_VTU_API_KEY" ? "simulated" : "live",
+        requestId: requestId,
+        vtpassId: result.content?.transactions?.transactionId || "N/A",
         createdAt: new Date().toISOString(),
       };
 
-      // 1. Deduct from balance
+      // 1. Deduct from balance locally in Firestore
       updateDoc(userRef, {
         balance: increment(-purchaseAmount)
       }).catch(async () => {
@@ -109,7 +139,7 @@ export default function AirtimePurchase() {
     } catch (error: any) {
       toast({
         title: "Delivery Failed",
-        description: error.message || "Network error during top-up.",
+        description: error.message || "Network error during top-up. No money was deducted.",
         variant: "destructive"
       });
     } finally {
@@ -123,27 +153,18 @@ export default function AirtimePurchase() {
         <div className="h-24 w-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-8 animate-in zoom-in duration-500">
           <CheckCircle2 size={56} className="animate-bounce" />
         </div>
-        <h1 className="text-3xl font-black mb-3">Purchase Successful</h1>
+        <h1 className="text-3xl font-black mb-3">Airtime Sent!</h1>
         <p className="text-muted-foreground mb-4 max-w-xs mx-auto">
-          ₦{parseFloat(amount).toLocaleString()} has been removed from your wallet for {phoneNumber}.
+          ₦{parseFloat(amount).toLocaleString()} has been sent to {phoneNumber} ({selectedNetwork?.name}).
         </p>
-        {VTU_CONFIG.API_KEY === "YOUR_VTU_API_KEY" && (
-          <Card className="bg-amber-50 border-amber-200 mb-10 max-w-xs mx-auto rounded-2xl">
-            <CardContent className="p-4 flex items-start gap-3 text-left">
-              <AlertTriangle className="text-amber-600 shrink-0" size={20} />
-              <p className="text-[10px] text-amber-800 font-medium">
-                <span className="font-bold">Note:</span> This was a simulated delivery. See <code className="bg-amber-100 px-1">docs/vtu-integration.md</code> to connect a live API.
-              </p>
-            </CardContent>
-          </Card>
-        )}
         <div className="w-full max-w-xs space-y-4">
           <Button className="w-full rounded-2xl h-14 text-lg font-bold shadow-lg" onClick={() => {
             setIsSuccess(false);
             setAmount("");
             setPhoneNumber("");
+            setSelectedNetwork(null);
           }}>
-            New Purchase
+            Buy More
           </Button>
           <Link href="/dashboard" className="block">
             <Button variant="outline" className="w-full rounded-2xl h-14 text-lg font-bold border-secondary">
@@ -167,16 +188,6 @@ export default function AirtimePurchase() {
       </header>
 
       <main className="px-6 py-8 space-y-8 max-w-xl mx-auto">
-        {VTU_CONFIG.API_KEY === "YOUR_VTU_API_KEY" && (
-          <div className="bg-amber-100 p-4 rounded-2xl flex items-center gap-4 border border-amber-200">
-             <AlertTriangle className="text-amber-600" />
-             <div className="text-xs text-amber-800 font-bold">
-               <p>Simulation Mode Active</p>
-               <p className="font-medium opacity-80">Connect a VTU API in config.ts to send real airtime.</p>
-             </div>
-          </div>
-        )}
-
         {/* Network Selection */}
         <section>
           <Label className="text-sm font-bold mb-4 block text-muted-foreground uppercase tracking-wider">Select Network</Label>
@@ -184,9 +195,9 @@ export default function AirtimePurchase() {
             {networks.map((net) => (
               <button
                 key={net.name}
-                onClick={() => setSelectedNetwork(net.name)}
+                onClick={() => setSelectedNetwork(net)}
                 className={`flex flex-col items-center gap-3 group p-3 rounded-3xl transition-all duration-300 ${
-                  selectedNetwork === net.name 
+                  selectedNetwork?.name === net.name 
                     ? "bg-primary/10 ring-2 ring-primary shadow-lg" 
                     : "bg-white border border-secondary hover:border-primary/40 shadow-sm"
                 }`}
@@ -246,9 +257,9 @@ export default function AirtimePurchase() {
         >
           {isProcessing ? (
             <div className="flex items-center gap-3">
-              <Loader2 className="animate-spin" /> Authorizing...
+              <Loader2 className="animate-spin" /> Authorizing Network...
             </div>
-          ) : "Confirm Purchase"}
+          ) : "Buy Airtime Now"}
         </Button>
       </main>
     </div>
