@@ -84,9 +84,14 @@ export default function SignupPage() {
       
       router.push("/auth/login");
     } catch (error: any) {
+      let message = error.message;
+      if (error.code === 'auth/operation-not-allowed') {
+        message = "Email/Password sign-in is not enabled in the Firebase Console. Please go to Authentication > Sign-in method and enable it.";
+      }
+      
       toast({
         title: "Signup Failed",
-        description: error.message,
+        description: message,
         variant: "destructive",
       });
     } finally {

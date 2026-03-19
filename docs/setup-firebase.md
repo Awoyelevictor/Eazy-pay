@@ -1,32 +1,28 @@
-# Connecting FyreVTU to Live Firebase
+# Connecting Eazy-pay to Live Firebase
 
-If you are seeing "API Key not valid" or "Firebase Project: undefined", follow these steps to manually connect your project.
+If you are seeing "API Key not valid" or "Firebase: Error (auth/operation-not-allowed)", follow these steps to manually connect your project.
 
 ### 1. Register a Web App in Firebase Console
 1. Go to your [Firebase Console](https://console.firebase.google.com/).
 2. Click the **Gear Icon (⚙️)** > **Project Settings**.
 3. Scroll down to the **"Your apps"** section and click the **Web icon (</>)**.
-4. Register the app (e.g., "FyreVTU-Web").
-5. You will see a `firebaseConfig` object. Copy those values.
+4. Register the app (e.g., "Eazy-pay-Web").
+5. You will see a `firebaseConfig` object. Copy those values into `src/firebase/config.ts`.
 
-### 2. Enable Authentication
+### 2. Enable Email/Password Authentication (CRITICAL)
 1. Go to **Build > Authentication** in the Firebase Console.
-2. Click **Get Started**.
+2. Click **Get Started** (if you haven't already).
 3. Click the **Sign-in method** tab.
-4. Click **Add new provider** and select **Google**.
-5. Enable it and select your support email.
-6. **IMPORTANT:** If you don't do this, you will see a `configuration-not-found` error.
+4. Click **Add new provider** and select **Email/Password**.
+5. **Enable** the first toggle (Email/Password).
+6. Click **Save**.
+7. **IMPORTANT:** If you don't do this, you will see the `auth/operation-not-allowed` error during signup.
 
-### 3. Add Environment Variables
-Add these values to your environment variables in this IDE:
+### 3. Set Up Firestore
+1. Go to **Build > Firestore Database**.
+2. Click **Create database**.
+3. Choose a location and start in **Production Mode**.
+4. Security rules will be automatically handled by the system.
 
-| Key | Value from firebaseConfig |
-| :--- | :--- |
-| `NEXT_PUBLIC_FIREBASE_API_KEY` | `apiKey` |
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | `authDomain` |
-| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | `projectId` |
-| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | `storageBucket` |
-| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | `messagingSenderId` |
-| `NEXT_PUBLIC_FIREBASE_APP_ID` | `appId` |
-
-Once you add the variables and restart the dev server, the app will automatically switch to "Live Mode".
+### 4. Enable Support Email
+1. In **Project Settings > General**, ensure a "Support email" is selected. This is required for authentication services.
