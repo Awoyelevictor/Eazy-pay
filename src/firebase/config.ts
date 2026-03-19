@@ -21,13 +21,21 @@ export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83a
 
 /** 
  * VTPASS API CONFIGURATION
- * These keys are stored on the server and used only via Server Actions.
  */
 export const VTU_CONFIG = {
   API_KEY: "384e1cf92f291f8bf76dc271e7b9f7fe",
   PUBLIC_KEY: "PK_6161bf9bf5899086dcb620e6d203620d9c9d66c815f",
   SECRET_KEY: "SK_752b182d5d8e844f8723f8678bf52759b40b94c7b9d",
   BASE_URL: "https://vtpass.com/api",
+};
+
+/**
+ * SHAGO PAYMENTS CONFIGURATION (For Gaming)
+ * To use live gaming, register at shagopayments.com and add your hash key.
+ */
+export const SHAGO_CONFIG = {
+  HASH_KEY: "SHAGO_HASH_KEY_HERE", // Replace with your Shago Hash Key
+  BASE_URL: "https://api.shagopayments.com/public/api/v2",
 };
 
 const app = getApps().length > 0 
