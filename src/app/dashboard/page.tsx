@@ -1,9 +1,8 @@
-
 "use client";
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Search, UserCircle, Zap, Loader2, AlertCircle, Settings } from "lucide-react";
+import { Bell, Search, UserCircle, Zap, Loader2, AlertCircle, Settings, ArrowLeft } from "lucide-react";
 import { WalletCard } from "@/components/dashboard/WalletCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { TransactionList } from "@/components/dashboard/TransactionList";
@@ -58,7 +57,15 @@ export default function DashboardPage() {
       {/* Top Header */}
       <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/profile">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="rounded-full h-10 w-10 hover:bg-secondary transition-colors"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft size={20} className="text-muted-foreground" />
+          </Button>
+          <Link href="/profile" className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center overflow-hidden border-2 border-primary/20 cursor-pointer hover:scale-105 transition-transform">
                {user.photoURL ? (
                  <img src={user.photoURL} alt={user.displayName || "User"} className="h-full w-full object-cover" />
@@ -66,11 +73,11 @@ export default function DashboardPage() {
                  <UserCircle className="text-primary h-full w-full" />
                )}
             </div>
+            <div>
+              <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest leading-none mb-1">Welcome back,</p>
+              <p className="text-sm font-bold">{user.displayName || user.email?.split('@')[0] || "User"}</p>
+            </div>
           </Link>
-          <div>
-            <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest leading-none mb-1">Welcome back,</p>
-            <p className="text-sm font-bold">{user.displayName || user.email?.split('@')[0] || "User"}</p>
-          </div>
         </div>
         <div className="flex items-center gap-1">
           <button className="h-10 w-10 rounded-full hover:bg-secondary flex items-center justify-center transition-colors">
