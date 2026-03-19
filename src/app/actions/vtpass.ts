@@ -42,7 +42,6 @@ export async function processPayment(payload: any) {
 }
 
 export async function verifyMerchant(payload: { billersCode: string; serviceID: string; type: string }) {
-  // Note: verification uses a slightly different endpoint sometimes, but merchant-verify is standard
   return await vtpassFetch('/merchant-verify', 'POST', payload);
 }
 

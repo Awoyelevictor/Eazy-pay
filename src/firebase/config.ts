@@ -21,10 +21,12 @@ export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83a
 
 /** 
  * VTPASS API CONFIGURATION
+ * Note: Keep API_KEY and PUBLIC_KEY safe. 
+ * Using Server Actions ensures these are never leaked to the browser.
  */
 export const VTU_CONFIG = {
   API_KEY: "384e1cf92f291f8bf76dc271e7b9f7fe",
-  PUBLIC_KEY: "REPLACE_WITH_YOUR_VTPASS_PUBLIC_KEY",
+  PUBLIC_KEY: "REPLACE_WITH_YOUR_VTPASS_PUBLIC_KEY", // Generate this in your VTpass dashboard
   BASE_URL: "https://vtpass.com/api",
 };
 
