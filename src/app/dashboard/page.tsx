@@ -1,8 +1,9 @@
+
 "use client";
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Search, UserCircle, Zap, Loader2, AlertCircle, Settings, ArrowLeft } from "lucide-react";
+import { Bell, Search, UserCircle, Zap, Loader2, AlertCircle, Settings, ArrowLeft, Wallet } from "lucide-react";
 import { WalletCard } from "@/components/dashboard/WalletCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { TransactionList } from "@/components/dashboard/TransactionList";
@@ -53,7 +54,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20 sm:pb-8">
+    <div className="min-h-screen bg-background pb-24">
       {/* Top Header */}
       <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -73,13 +74,28 @@ export default function DashboardPage() {
                  <UserCircle className="text-primary h-full w-full" />
                )}
             </div>
-            <div>
+            <div className="hidden sm:block">
               <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest leading-none mb-1">Welcome back,</p>
               <p className="text-sm font-bold">{user.displayName || user.email?.split('@')[0] || "User"}</p>
             </div>
           </Link>
         </div>
-        <div className="flex items-center gap-1">
+
+        <div className="flex items-center gap-2">
+          {/* Desktop Only Nav Links */}
+          <div className="hidden md:flex items-center gap-2 mr-4 border-r pr-4 border-secondary">
+            <Link href="/wallet">
+              <Button variant="ghost" className="gap-2 font-bold rounded-xl">
+                <Wallet size={18} /> Wallet
+              </Button>
+            </Link>
+            <Link href="/services">
+              <Button variant="ghost" className="gap-2 font-bold rounded-xl">
+                <Zap size={18} /> Services
+              </Button>
+            </Link>
+          </div>
+
           <button className="h-10 w-10 rounded-full hover:bg-secondary flex items-center justify-center transition-colors">
             <Search size={20} className="text-muted-foreground" />
           </button>
@@ -93,17 +109,17 @@ export default function DashboardPage() {
       </header>
 
       <main className="px-6 py-6 max-w-4xl mx-auto space-y-8">
-        <section>
+        <section id="wallet-section">
           <WalletCard />
         </section>
 
-        <section>
+        <section id="ai-buy">
           <AIQuickBuy />
         </section>
 
-        <section>
+        <section id="services-grid">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold">Services</h2>
+            <h2 className="text-lg font-bold">Quick Services</h2>
             <Link href="/services" className="text-primary text-sm font-medium">View all</Link>
           </div>
           <QuickActions />
@@ -112,7 +128,7 @@ export default function DashboardPage() {
         <section className="bg-accent rounded-3xl p-6 text-accent-foreground flex items-center justify-between overflow-hidden relative shadow-lg">
           <div className="relative z-10 max-w-[60%]">
             <h3 className="text-xl font-black mb-1">Gamer's Choice!</h3>
-            <p className="text-sm opacity-90 mb-4 font-medium">Get extra credits on CODM & Free Fire top-ups this weekend.</p>
+            <p className="text-sm opacity-90 mb-4 font-medium">Get extra credits on CODM & Bloodstrike top-ups this weekend.</p>
             <Link href="/services/games">
               <button className="bg-foreground text-background px-4 py-2 rounded-full text-xs font-bold shadow-md hover:scale-105 transition-transform">
                 Get Credits
@@ -124,7 +140,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section>
+        <section id="recent-activity">
           <TransactionList />
         </section>
       </main>
