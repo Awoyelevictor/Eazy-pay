@@ -14,11 +14,12 @@ import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { VTU_CONFIG } from "@/firebase/config";
 
 const providers = [
-  { name: "DStv", bundles: ["Compact - ₦12,500", "Confam - ₦7,400", "Premium - ₦29,500"] },
-  { name: "GOtv", bundles: ["Jolli - ₦4,850", "Max - ₦7,200", "Supa - ₦9,600"] },
-  { name: "StarTimes", bundles: ["Nova - ₦1,500", "Smart - ₦3,500", "Super - ₦6,500"] },
+  { name: "DStv", vtuId: "dstv", bundles: [{ label: "Premium", variation: "dstv-premium", price: 29500 }, { label: "Compact", variation: "dstv-compact", price: 12500 }] },
+  { name: "GOtv", vtuId: "gotv", bundles: [{ label: "Max", variation: "gotv-max", price: 7200 }, { label: "Supa", variation: "gotv-supa", price: 9600 }] },
+  { name: "StarTimes", vtuId: "startimes", bundles: [{ label: "Smart", variation: "startimes-smart", price: 3500 }] },
 ];
 
 export default function CablePurchase() {
@@ -26,7 +27,7 @@ export default function CablePurchase() {
   const firestore = useFirestore();
   const [selectedProvider, setSelectedProvider] = useState<typeof providers[0] | null>(null);
   const [smartCardNumber, setSmartCardNumber] = useState("");
-  const [bundle, setBundle] = useState("");
+  const [selectedBundleId, setSelectedBundleId] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const { toast } = useToast();
@@ -38,60 +39,96 @@ export default function CablePurchase() {
 
   const { data: profile } = useDoc(userRef);
 
-  const price = useMemo(() => {
-    if (!bundle) return 0;
-    const match = bundle.match(/₦([\d,]+)/);
-    return match ? parseFloat(match[1].replace(/,/g, "")) : 0;
-  }, [bundle]);
+  const selectedBundle = useMemo(() => {
+    if (!selectedProvider || !selectedBundleId) return null;
+    return selectedProvider.bundles.find(b => b.variation === selectedBundleId);
+  }, [selectedProvider, selectedBundleId]);
 
-  const handlePurchase = () => {
-    if (!user || !firestore || !userRef) return;
+  const generateRequestId = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, "0");
+    const day = now.getDate().toString().padStart(2, "0");
+    const hour = now.getHours().toString().padStart(2, "0");
+    const minute = now.getMinutes().toString().padStart(2, "0");
+    const randomPart = Math.random().toString(36).substring(2, 10);
+    return `${year}${month}${day}${hour}${minute}${randomPart}`;
+  };
+
+  const handlePurchase = async () => {
+    if (!user || !firestore || !userRef || !selectedBundle || !selectedProvider) return;
     
-    if (!selectedProvider || !smartCardNumber || !bundle) {
-      toast({ title: "Please fill all fields", variant: "destructive" });
+    if (!smartCardNumber) {
+      toast({ title: "SmartCard Required", variant: "destructive" });
       return;
     }
 
-    if (profile && profile.balance < price) {
+    if (profile && profile.balance < selectedBundle.price) {
       toast({ title: "Insufficient Balance", variant: "destructive" });
       return;
     }
 
     setIsProcessing(true);
 
-    const transactionData = {
-      type: "cable",
-      amount: price,
-      service: `${selectedProvider.name} - ${bundle.split(" - ")[0]}`,
-      recipient: smartCardNumber,
-      status: "success",
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      const requestId = generateRequestId();
+      
+      const response = await fetch(`${VTU_CONFIG.BASE_URL}/pay`, {
+        method: 'POST',
+        headers: {
+          'api-key': VTU_CONFIG.API_KEY,
+          'public-key': VTU_CONFIG.PUBLIC_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          request_id: requestId,
+          serviceID: selectedProvider.vtuId,
+          billersCode: smartCardNumber,
+          variation_code: selectedBundle.variation,
+          amount: selectedBundle.price,
+          phone: user.phoneNumber || "08000000000"
+        })
+      });
 
-    updateDoc(userRef, {
-      balance: increment(-price)
-    }).catch(async () => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: userRef.path,
-        operation: 'update',
-        requestResourceData: { balance: increment(-price) }
-      }));
-    });
+      const result = await response.json();
 
-    const transactionsRef = collection(firestore, "users", user.uid, "transactions");
-    addDoc(transactionsRef, transactionData)
-      .then(() => {
-        setIsProcessing(false);
-        setIsSuccess(true);
-      })
-      .catch(async () => {
-        setIsProcessing(false);
+      if (result.code !== '000') {
+        throw new Error(result.response_description || "Subscription Failed");
+      }
+
+      const transactionData = {
+        type: "cable",
+        amount: selectedBundle.price,
+        service: `${selectedProvider.name} - ${selectedBundle.label}`,
+        recipient: smartCardNumber,
+        status: "success",
+        requestId: requestId,
+        createdAt: new Date().toISOString(),
+      };
+
+      updateDoc(userRef, {
+        balance: increment(-selectedBundle.price)
+      }).catch(async () => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: transactionsRef.path,
-          operation: 'create',
-          requestResourceData: transactionData
+          path: userRef.path,
+          operation: 'update',
+          requestResourceData: { balance: increment(-selectedBundle.price) }
         }));
       });
+
+      const transactionsRef = collection(firestore, "users", user.uid, "transactions");
+      await addDoc(transactionsRef, transactionData);
+      
+      setIsSuccess(true);
+    } catch (error: any) {
+      toast({
+        title: "Renewal Failed",
+        description: error.message || "Failed to renew cable subscription.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (isSuccess) {
@@ -137,7 +174,7 @@ export default function CablePurchase() {
               {providers.map((p) => (
                 <button
                   key={p.name}
-                  onClick={() => { setSelectedProvider(p); setBundle(""); }}
+                  onClick={() => { setSelectedProvider(p); setSelectedBundleId(""); }}
                   className={`h-14 rounded-2xl border transition-all font-bold ${
                     selectedProvider?.name === p.name ? "bg-primary/10 border-primary text-primary" : "bg-white border-secondary"
                   }`}
@@ -151,13 +188,13 @@ export default function CablePurchase() {
           {selectedProvider && (
             <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
               <Label className="text-xs font-bold uppercase text-muted-foreground">Select Bundle</Label>
-              <Select onValueChange={setBundle} value={bundle}>
+              <Select onValueChange={setSelectedBundleId} value={selectedBundleId}>
                 <SelectTrigger className="h-14 rounded-2xl border-secondary bg-white">
                   <SelectValue placeholder="Choose package" />
                 </SelectTrigger>
                 <SelectContent>
                   {selectedProvider.bundles.map((b) => (
-                    <SelectItem key={b} value={b}>{b}</SelectItem>
+                    <SelectItem key={b.variation} value={b.variation}>{b.label} - ₦{b.price.toLocaleString()}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

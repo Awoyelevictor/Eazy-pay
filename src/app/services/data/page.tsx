@@ -13,25 +13,27 @@ import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { VTU_CONFIG } from "@/firebase/config";
 
 const networks = [
-  { name: "MTN", color: "bg-yellow-400", logo: "M", textColor: "text-black" },
-  { name: "Glo", color: "bg-green-600", logo: "G", textColor: "text-white" },
-  { name: "Airtel", color: "bg-red-600", logo: "A", textColor: "text-white" },
-  { name: "9mobile", color: "bg-emerald-900", logo: "9", textColor: "text-white" },
+  { name: "MTN", color: "bg-yellow-400", logo: "M", textColor: "text-black", vtuId: "mtn-data" },
+  { name: "Glo", color: "bg-green-600", logo: "G", textColor: "text-white", vtuId: "glo-data" },
+  { name: "Airtel", color: "bg-red-600", logo: "A", textColor: "text-white", vtuId: "airtel-data" },
+  { name: "9mobile", color: "bg-emerald-900", logo: "9", textColor: "text-white", vtuId: "etisalat-data" },
 ];
 
+// Note: These variation_codes will be refined once you provide the Data documentation
 const bundles = [
-  { id: "1", label: "1GB / 30 Days", price: 300, value: "1GB" },
-  { id: "2", label: "2GB / 30 Days", price: 600, value: "2GB" },
-  { id: "3", label: "5GB / 30 Days", price: 1500, value: "5GB" },
-  { id: "4", label: "10GB / 30 Days", price: 2900, value: "10GB" },
+  { id: "1", label: "1GB / 30 Days", price: 300, value: "1GB", variation: "mtn-1gb-30day" },
+  { id: "2", label: "2GB / 30 Days", price: 600, value: "2GB", variation: "mtn-2gb-30day" },
+  { id: "5", label: "5GB / 30 Days", price: 1500, value: "5GB", variation: "mtn-5gb-30day" },
+  { id: "10", label: "10GB / 30 Days", price: 2900, value: "10GB", variation: "mtn-10gb-30day" },
 ];
 
 export default function DataPurchase() {
   const { user } = useUser();
   const firestore = useFirestore();
-  const [selectedNetwork, setSelectedNetwork] = useState("");
+  const [selectedNetwork, setSelectedNetwork] = useState<typeof networks[0] | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [selectedBundle, setSelectedBundle] = useState<typeof bundles[0] | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -44,6 +46,17 @@ export default function DataPurchase() {
   }, [firestore, user]);
 
   const { data: profile } = useDoc(userRef);
+
+  const generateRequestId = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, "0");
+    const day = now.getDate().toString().padStart(2, "0");
+    const hour = now.getHours().toString().padStart(2, "0");
+    const minute = now.getMinutes().toString().padStart(2, "0");
+    const randomPart = Math.random().toString(36).substring(2, 10);
+    return `${year}${month}${day}${hour}${minute}${randomPart}`;
+  };
 
   const handlePurchase = async () => {
     if (!user || !firestore || !userRef) return;
@@ -58,46 +71,73 @@ export default function DataPurchase() {
       return;
     }
 
+    if (VTU_CONFIG.PUBLIC_KEY.includes("REPLACE_WITH")) {
+      toast({ title: "Public Key Required", description: "Generate your Public Key in VTpass dashboard.", variant: "destructive" });
+      return;
+    }
+
     setIsProcessing(true);
 
-    // SIMULATED VTU API CALL
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      const requestId = generateRequestId();
+      
+      const response = await fetch(`${VTU_CONFIG.BASE_URL}/pay`, {
+        method: 'POST',
+        headers: {
+          'api-key': VTU_CONFIG.API_KEY,
+          'public-key': VTU_CONFIG.PUBLIC_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          request_id: requestId,
+          serviceID: selectedNetwork.vtuId,
+          billersCode: phoneNumber,
+          variation_code: selectedBundle.variation,
+          amount: selectedBundle.price,
+          phone: phoneNumber
+        })
+      });
 
-    const transactionData = {
-      type: "data",
-      amount: selectedBundle.price,
-      network: selectedNetwork,
-      recipient: phoneNumber,
-      service: selectedBundle.label,
-      status: "success",
-      deliveryStatus: "simulated",
-      createdAt: new Date().toISOString(),
-    };
+      const result = await response.json();
 
-    updateDoc(userRef, {
-      balance: increment(-selectedBundle.price)
-    }).catch(async () => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: userRef.path,
-        operation: 'update',
-        requestResourceData: { balance: increment(-selectedBundle.price) }
-      }));
-    });
+      if (result.code !== '000') {
+        throw new Error(result.response_description || "Network Provider Error");
+      }
 
-    const transactionsRef = collection(firestore, "users", user.uid, "transactions");
-    addDoc(transactionsRef, transactionData)
-      .then(() => {
-        setIsProcessing(false);
-        setIsSuccess(true);
-      })
-      .catch(async () => {
-        setIsProcessing(false);
+      const transactionData = {
+        type: "data",
+        amount: selectedBundle.price,
+        network: selectedNetwork.name,
+        recipient: phoneNumber,
+        service: selectedBundle.label,
+        status: "success",
+        requestId: requestId,
+        createdAt: new Date().toISOString(),
+      };
+
+      updateDoc(userRef, {
+        balance: increment(-selectedBundle.price)
+      }).catch(async () => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: transactionsRef.path,
-          operation: 'create',
-          requestResourceData: transactionData
+          path: userRef.path,
+          operation: 'update',
+          requestResourceData: { balance: increment(-selectedBundle.price) }
         }));
       });
+
+      const transactionsRef = collection(firestore, "users", user.uid, "transactions");
+      await addDoc(transactionsRef, transactionData);
+      
+      setIsSuccess(true);
+    } catch (error: any) {
+      toast({
+        title: "Delivery Failed",
+        description: error.message || "Failed to process data bundle.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (isSuccess) {
@@ -106,18 +146,10 @@ export default function DataPurchase() {
         <div className="h-28 w-28 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-8 animate-in zoom-in duration-500">
           <CheckCircle2 size={64} className="animate-bounce" />
         </div>
-        <h1 className="text-3xl font-black mb-3">Balance Deducted</h1>
-        <p className="text-muted-foreground mb-4 max-w-xs mx-auto text-lg">
-           ₦{selectedBundle?.price.toLocaleString()} removed for {selectedBundle?.value} plan.
+        <h1 className="text-3xl font-black mb-3">Data Subscription Success!</h1>
+        <p className="text-muted-foreground mb-10 max-w-xs mx-auto text-lg">
+           {selectedBundle?.value} has been sent to {phoneNumber}.
         </p>
-        <Card className="bg-amber-50 border-amber-200 mb-10 max-w-xs mx-auto rounded-2xl">
-          <CardContent className="p-4 flex items-start gap-3 text-left">
-            <AlertTriangle className="text-amber-600 shrink-0" size={20} />
-            <p className="text-[10px] text-amber-800 font-medium">
-              <span className="font-bold">Test Mode:</span> This transaction was simulated. No real data was sent to the network.
-            </p>
-          </CardContent>
-        </Card>
         <div className="w-full max-w-xs space-y-4">
           <Button className="w-full rounded-2xl h-16 text-lg font-bold shadow-xl shadow-primary/20" onClick={() => setIsSuccess(false)}>
             Buy Another Bundle
@@ -144,20 +176,15 @@ export default function DataPurchase() {
       </header>
 
       <main className="px-6 py-8 space-y-8 max-w-xl mx-auto pb-24">
-        <div className="bg-amber-100 p-4 rounded-2xl flex items-center gap-4 border border-amber-200">
-           <AlertTriangle className="text-amber-600" />
-           <p className="text-xs font-bold text-amber-800">Note: Real balance will be deducted, but data delivery is simulated.</p>
-        </div>
-
         <section>
           <Label className="text-xs font-black mb-4 block text-muted-foreground uppercase tracking-widest">1. Choose Network</Label>
           <div className="grid grid-cols-4 gap-3">
             {networks.map((net) => (
               <button
                 key={net.name}
-                onClick={() => setSelectedNetwork(net.name)}
+                onClick={() => setSelectedNetwork(net)}
                 className={`flex flex-col items-center gap-2 p-2 rounded-2xl transition-all border-2 ${
-                  selectedNetwork === net.name 
+                  selectedNetwork?.name === net.name 
                     ? "bg-primary/5 border-primary shadow-md scale-105" 
                     : "bg-white border-transparent shadow-sm grayscale opacity-70"
                 }`}
