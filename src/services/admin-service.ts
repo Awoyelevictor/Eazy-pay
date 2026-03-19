@@ -4,8 +4,6 @@ import {
   Firestore, 
   collection, 
   getDocs, 
-  addDoc, 
-  writeBatch, 
   query, 
   where,
   getDoc,
@@ -15,38 +13,56 @@ import { createAINotification } from './notification-service';
 
 /**
  * Fetch aggregated statistics for the admin dashboard.
+ * Optimized to use parallel fetching for subcollections.
  */
 export async function getGlobalStats(db: Firestore) {
-  const usersSnap = await getDocs(collection(db, 'users'));
-  const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  
-  let totalBalance = 0;
-  let allTransactions: any[] = [];
+  try {
+    const usersSnap = await getDocs(collection(db, 'users'));
+    const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    if (users.length === 0) {
+      return {
+        userCount: 0,
+        transactionCount: 0,
+        totalVolume: 0,
+        activeBalance: 0,
+        successRate: '0%',
+        transactions: [],
+        users: []
+      };
+    }
 
-  // This is a heavy operation for an MVP, but necessary for global stats
-  // In a real production app, we would use Firebase Extensions or Cloud Functions
-  // to maintain these counters in a single 'stats' document.
-  for (const user of users) {
-    totalBalance += (user as any).balance || 0;
-    const txSnap = await getDocs(collection(db, 'users', user.id, 'transactions'));
-    allTransactions.push(...txSnap.docs.map(d => d.data()));
+    let totalBalance = 0;
+    
+    // Fetch all transactions in parallel to avoid long execution times
+    const transactionPromises = users.map(async (user) => {
+      totalBalance += (user as any).balance || 0;
+      const txSnap = await getDocs(collection(db, 'users', user.id, 'transactions'));
+      return txSnap.docs.map(d => ({ id: d.id, userId: user.id, ...d.data() }));
+    });
+
+    const results = await Promise.all(transactionPromises);
+    const allTransactions = results.flat();
+
+    const successTx = allTransactions.filter(t => t.status === 'success');
+    const totalVolume = successTx.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+    const successRate = allTransactions.length > 0 
+      ? ((successTx.length / allTransactions.length) * 100).toFixed(1) + '%' 
+      : '100%';
+
+    return {
+      userCount: users.length,
+      transactionCount: allTransactions.length,
+      totalVolume,
+      activeBalance: totalBalance,
+      successRate,
+      transactions: allTransactions,
+      users
+    };
+  } catch (error) {
+    console.error("Global Stats Fetch Error:", error);
+    throw error;
   }
-
-  const successTx = allTransactions.filter(t => t.status === 'success');
-  const totalVolume = successTx.reduce((acc, t) => acc + (t.amount || 0), 0);
-  const successRate = allTransactions.length > 0 
-    ? ((successTx.length / allTransactions.length) * 100).toFixed(1) + '%' 
-    : '100%';
-
-  return {
-    userCount: users.length,
-    transactionCount: allTransactions.length,
-    totalVolume,
-    activeBalance: totalBalance,
-    successRate,
-    transactions: allTransactions,
-    users
-  };
 }
 
 /**

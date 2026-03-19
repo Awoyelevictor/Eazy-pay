@@ -10,11 +10,11 @@ import {
   MessageSquare, 
   Search, 
   TrendingUp, 
-  PieChart as PieChartIcon,
   Loader2,
   RefreshCcw,
   LayoutDashboard,
-  BellRing
+  BellRing,
+  AlertCircle
 } from 'lucide-react';
 import { 
   Card, 
@@ -25,7 +25,6 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useFirestore, useUser } from '@/firebase';
 import { getGlobalStats, broadcastGlobalNotification } from '@/services/admin-service';
 import { adminAssistant } from '@/ai/flows/admin-assistant-flow';
@@ -37,11 +36,7 @@ import {
   XAxis, 
   YAxis, 
   Tooltip, 
-  Cell, 
-  PieChart, 
-  Pie,
-  AreaChart,
-  Area
+  Cell
 } from 'recharts';
 
 export default function AdminDashboard() {
@@ -51,6 +46,7 @@ export default function AdminDashboard() {
   
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [broadcasting, setBroadcasting] = useState(false);
   
@@ -62,11 +58,14 @@ export default function AdminDashboard() {
   const fetchStats = async () => {
     if (!db) return;
     setLoading(true);
+    setError(null);
     try {
       const data = await getGlobalStats(db);
       setStats(data);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setError("Failed to fetch app statistics. Check console for details.");
+      toast({ title: "Sync Failed", description: "Database is unreachable or permission denied.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -96,12 +95,13 @@ export default function AdminDashboard() {
 
     const userMsg = { role: 'user', text: chatInput };
     setChatMessages(prev => [...prev, userMsg]);
+    const currentInput = chatInput;
     setChatInput('');
     setAiLoading(true);
 
     try {
       const result = await adminAssistant({
-        message: userMsg.text,
+        message: currentInput,
         appContext: {
           userCount: stats.userCount,
           transactionCount: stats.transactionCount,
@@ -119,13 +119,13 @@ export default function AdminDashboard() {
   };
 
   const chartData = useMemo(() => {
-    if (!stats) return [];
-    // Group transactions by type for pie chart
+    if (!stats || !stats.transactions) return [];
     const groups: Record<string, number> = {};
     stats.transactions.forEach((t: any) => {
-      groups[t.type] = (groups[t.type] || 0) + 1;
+      const type = t.type || 'other';
+      groups[type] = (groups[type] || 0) + 1;
     });
-    return Object.entries(groups).map(([name, value]) => ({ name, value }));
+    return Object.entries(groups).map(([name, value]) => ({ name: name.toUpperCase(), value }));
   }, [stats]);
 
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -134,6 +134,19 @@ export default function AdminDashboard() {
     <div className="min-h-screen flex flex-col items-center justify-center gap-4">
       <Loader2 className="animate-spin text-primary h-12 w-12" />
       <p className="font-black text-xs uppercase tracking-[0.3em] opacity-50">Initializing Admin OS</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
+      <AlertCircle className="text-destructive h-16 w-16" />
+      <div>
+        <h2 className="text-2xl font-black mb-2">Sync Error</h2>
+        <p className="text-muted-foreground max-w-sm">{error}</p>
+      </div>
+      <Button onClick={fetchStats} className="rounded-2xl h-14 px-8 font-black gap-2">
+        <RefreshCcw size={20} /> Retry Sync
+      </Button>
     </div>
   );
 
@@ -187,20 +200,27 @@ export default function AdminDashboard() {
             <CardDescription>Breakdown of top-ups by category</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 700 }} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  cursor={{ fill: '#f1f5f9' }}
-                />
-                <Bar dataKey="value" radius={[10, 10, 0, 0]}>
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                    cursor={{ fill: '#f1f5f9' }}
+                  />
+                  <Bar dataKey="value" radius={[10, 10, 0, 0]}>
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground font-medium">
+                No transaction data available yet
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -213,7 +233,7 @@ export default function AdminDashboard() {
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Announcement Description</label>
               <textarea 
-                className="w-full bg-slate-800 border-none rounded-2xl p-4 text-sm h-32 focus:ring-2 ring-primary resize-none placeholder:text-slate-600"
+                className="w-full bg-slate-800 border-none rounded-2xl p-4 text-sm h-32 focus:ring-2 ring-primary resize-none placeholder:text-slate-600 text-white"
                 placeholder="e.g. System maintenance scheduled for Sunday midnight..."
                 value={broadcastMsg}
                 onChange={(e) => setBroadcastMsg(e.target.value)}
@@ -224,7 +244,7 @@ export default function AdminDashboard() {
               onClick={handleBroadcast}
               disabled={broadcasting || !broadcastMsg}
             >
-              {broadcasting ? <Loader2 className="animate-spin" /> : <><BellRing className="mr-2" /> Blast to All</>}
+              {broadcasting ? <Loader2 className="animate-spin" /> : <><BellRing className="mr-2" size={20} /> Blast to All</>}
             </Button>
           </CardContent>
         </Card>
@@ -299,23 +319,29 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {stats.users.sort((a:any, b:any) => (b.balance || 0) - (a.balance || 0)).slice(0, 6).map((u: any) => (
-                <div key={u.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center font-black text-primary shadow-sm border border-slate-100">
-                      {u.displayName?.charAt(0) || u.email?.charAt(0)}
+              {stats.users.length > 0 ? (
+                stats.users.sort((a:any, b:any) => (b.balance || 0) - (a.balance || 0)).slice(0, 6).map((u: any) => (
+                  <div key={u.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center font-black text-primary shadow-sm border border-slate-100">
+                        {u.displayName?.charAt(0) || u.email?.charAt(0)}
+                      </div>
+                      <div className="max-w-[150px]">
+                        <p className="text-sm font-bold text-slate-900 truncate">{u.displayName || 'Guest User'}</p>
+                        <p className="text-[10px] text-slate-400 font-medium truncate">{u.email}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-900">{u.displayName || 'Guest User'}</p>
-                      <p className="text-[10px] text-slate-400 font-medium truncate max-w-[120px]">{u.email}</p>
+                    <div className="text-right">
+                      <p className="text-sm font-black text-emerald-600">₦{(Number(u.balance) || 0).toLocaleString()}</p>
+                      <p className="text-[9px] font-black uppercase text-slate-400">Balance</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-black text-emerald-600">₦{u.balance?.toLocaleString()}</p>
-                    <p className="text-[9px] font-black uppercase text-slate-400">Balance</p>
-                  </div>
+                ))
+              ) : (
+                <div className="py-20 text-center text-muted-foreground font-medium">
+                  No active users found.
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
