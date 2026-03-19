@@ -19,14 +19,21 @@ const firebaseConfig = {
 // Paystack Public Key for live transactions
 export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83ace52";
 
+/** 
+ * VTU PROVIDER CONFIGURATION
+ * Replace these with your actual keys from VTpass, ClubKonnect, etc.
+ */
+export const VTU_CONFIG = {
+  API_KEY: "YOUR_VTU_API_KEY",
+  PUBLIC_KEY: "YOUR_VTU_PUBLIC_KEY",
+  BASE_URL: "https://api-service.com/api", // e.g., https://api-service.vtpass.com/api
+};
+
 const app = getApps().length > 0 
   ? getApp() 
   : initializeApp(firebaseConfig);
 
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-// Security Rules Watcher Trigger
-// Last updated: 2024-03-20 - Enforcing strict user document ownership.
 
 export { app, auth, db };

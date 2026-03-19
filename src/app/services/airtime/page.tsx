@@ -13,6 +13,7 @@ import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { VTU_CONFIG } from "@/firebase/config";
 
 const networks = [
   { name: "MTN", color: "bg-yellow-400", logo: "M" },
@@ -71,47 +72,49 @@ export default function AirtimePurchase() {
 
     setIsProcessing(true);
 
-    // SIMULATED VTU API CALL
-    // In production, you would use 'fetch' to call your VTU provider's API here.
-    // e.g. await fetch('https://api.vtu-provider.com/buy', { method: 'POST', body: ... })
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      /**
+       * REAL VTU API INTEGRATION POINT
+       * Replace this timeout with a real fetch call once you have an API key.
+       * See docs/vtu-integration.md for an example.
+       */
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-    const transactionData = {
-      type: "airtime",
-      amount: purchaseAmount,
-      network: selectedNetwork,
-      recipient: phoneNumber,
-      status: "success",
-      deliveryStatus: "simulated", // Marks that this was a test delivery
-      createdAt: new Date().toISOString(),
-    };
+      const transactionData = {
+        type: "airtime",
+        amount: purchaseAmount,
+        network: selectedNetwork,
+        recipient: phoneNumber,
+        status: "success",
+        deliveryStatus: VTU_CONFIG.API_KEY === "YOUR_VTU_API_KEY" ? "simulated" : "live",
+        createdAt: new Date().toISOString(),
+      };
 
-    // 1. Deduct from balance
-    updateDoc(userRef, {
-      balance: increment(-purchaseAmount)
-    }).catch(async () => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: userRef.path,
-        operation: 'update',
-        requestResourceData: { balance: increment(-purchaseAmount) },
-      }));
-    });
-
-    // 2. Add transaction record
-    const transactionsRef = collection(firestore, "users", user.uid, "transactions");
-    addDoc(transactionsRef, transactionData)
-      .then(() => {
-        setIsProcessing(false);
-        setIsSuccess(true);
-      })
-      .catch(async () => {
-        setIsProcessing(false);
+      // 1. Deduct from balance
+      updateDoc(userRef, {
+        balance: increment(-purchaseAmount)
+      }).catch(async () => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: transactionsRef.path,
-          operation: 'create',
-          requestResourceData: transactionData,
+          path: userRef.path,
+          operation: 'update',
+          requestResourceData: { balance: increment(-purchaseAmount) },
         }));
       });
+
+      // 2. Add transaction record
+      const transactionsRef = collection(firestore, "users", user.uid, "transactions");
+      await addDoc(transactionsRef, transactionData);
+      
+      setIsSuccess(true);
+    } catch (error: any) {
+      toast({
+        title: "Delivery Failed",
+        description: error.message || "Network error during top-up.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (isSuccess) {
@@ -120,18 +123,20 @@ export default function AirtimePurchase() {
         <div className="h-24 w-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-8 animate-in zoom-in duration-500">
           <CheckCircle2 size={56} className="animate-bounce" />
         </div>
-        <h1 className="text-3xl font-black mb-3">Balance Deducted</h1>
+        <h1 className="text-3xl font-black mb-3">Purchase Successful</h1>
         <p className="text-muted-foreground mb-4 max-w-xs mx-auto">
           ₦{parseFloat(amount).toLocaleString()} has been removed from your wallet for {phoneNumber}.
         </p>
-        <Card className="bg-amber-50 border-amber-200 mb-10 max-w-xs mx-auto rounded-2xl">
-          <CardContent className="p-4 flex items-start gap-3 text-left">
-            <AlertTriangle className="text-amber-600 shrink-0" size={20} />
-            <p className="text-[10px] text-amber-800 font-medium">
-              <span className="font-bold">Note:</span> This is a simulated delivery. Real airtime was not sent because a VTU API is not yet connected to your project.
-            </p>
-          </CardContent>
-        </Card>
+        {VTU_CONFIG.API_KEY === "YOUR_VTU_API_KEY" && (
+          <Card className="bg-amber-50 border-amber-200 mb-10 max-w-xs mx-auto rounded-2xl">
+            <CardContent className="p-4 flex items-start gap-3 text-left">
+              <AlertTriangle className="text-amber-600 shrink-0" size={20} />
+              <p className="text-[10px] text-amber-800 font-medium">
+                <span className="font-bold">Note:</span> This was a simulated delivery. See <code className="bg-amber-100 px-1">docs/vtu-integration.md</code> to connect a live API.
+              </p>
+            </CardContent>
+          </Card>
+        )}
         <div className="w-full max-w-xs space-y-4">
           <Button className="w-full rounded-2xl h-14 text-lg font-bold shadow-lg" onClick={() => {
             setIsSuccess(false);
@@ -162,11 +167,15 @@ export default function AirtimePurchase() {
       </header>
 
       <main className="px-6 py-8 space-y-8 max-w-xl mx-auto">
-        <AlertTriangle className="text-amber-600 mx-auto" size={32} />
-        <div className="text-center space-y-2">
-           <h2 className="text-lg font-black text-amber-600">Development Mode</h2>
-           <p className="text-xs text-muted-foreground">Purchases will deduct real wallet balance but use a simulated network delivery.</p>
-        </div>
+        {VTU_CONFIG.API_KEY === "YOUR_VTU_API_KEY" && (
+          <div className="bg-amber-100 p-4 rounded-2xl flex items-center gap-4 border border-amber-200">
+             <AlertTriangle className="text-amber-600" />
+             <div className="text-xs text-amber-800 font-bold">
+               <p>Simulation Mode Active</p>
+               <p className="font-medium opacity-80">Connect a VTU API in config.ts to send real airtime.</p>
+             </div>
+          </div>
+        )}
 
         {/* Network Selection */}
         <section>
