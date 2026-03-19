@@ -14,7 +14,7 @@ import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { VTU_CONFIG } from "@/firebase/config";
+import { processPayment } from "@/app/actions/vtpass";
 
 const providers = [
   { name: "DStv", vtuId: "dstv", bundles: [{ label: "Premium", variation: "dstv-premium", price: 29500 }, { label: "Compact", variation: "dstv-compact", price: 12500 }] },
@@ -73,24 +73,15 @@ export default function CablePurchase() {
     try {
       const requestId = generateRequestId();
       
-      const response = await fetch(`${VTU_CONFIG.BASE_URL}/pay`, {
-        method: 'POST',
-        headers: {
-          'api-key': VTU_CONFIG.API_KEY,
-          'public-key': VTU_CONFIG.PUBLIC_KEY,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          request_id: requestId,
-          serviceID: selectedProvider.vtuId,
-          billersCode: smartCardNumber,
-          variation_code: selectedBundle.variation,
-          amount: selectedBundle.price,
-          phone: user.phoneNumber || "08000000000"
-        })
+      // USE SERVER ACTION INSTEAD OF DIRECT FETCH
+      const result = await processPayment({
+        request_id: requestId,
+        serviceID: selectedProvider.vtuId,
+        billersCode: smartCardNumber,
+        variation_code: selectedBundle.variation,
+        amount: selectedBundle.price,
+        phone: user.email || "08000000000"
       });
-
-      const result = await response.json();
 
       if (result.code !== '000') {
         throw new Error(result.response_description || "Subscription Failed");
