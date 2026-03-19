@@ -31,11 +31,18 @@ export const VTU_CONFIG = {
 
 /**
  * SHAGO PAYMENTS CONFIGURATION (For Gaming)
- * To use live gaming, register at shagopayments.com and add your hash key.
  */
 export const SHAGO_CONFIG = {
-  HASH_KEY: "SHAGO_HASH_KEY_HERE", // Replace with your Shago Hash Key
+  HASH_KEY: "SHAGO_HASH_KEY_HERE", 
   BASE_URL: "https://api.shagopayments.com/public/api/v2",
+};
+
+/**
+ * PAY1ST CONFIGURATION (Alternative VTU)
+ */
+export const PAY1ST_CONFIG = {
+  API_KEY: "PAY1ST_API_KEY_HERE",
+  BASE_URL: "https://pay1st.com.ng/api",
 };
 
 const app = getApps().length > 0 

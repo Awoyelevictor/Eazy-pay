@@ -1,45 +1,25 @@
 
-# Integrating a Real VTU API
+# Integrating VTU & Gaming Gateways
 
-To send real airtime and data, you need to connect Eazy-pay to a Virtual Top-Up (VTU) gateway.
+Eazy-pay uses a multi-provider strategy to ensure reliability and the best prices.
 
-### 1. Choose a Provider
-Register for a developer account at one of these popular Nigerian providers:
-- **VTpass** (https://www.vtpass.com/rest-api)
-- **ClubKonnect** (https://www.clubkonnect.com/)
-- **Shago Payments** (https://shagopayments.com/)
+### 1. VTpass (Main Utility)
+- **Use for**: Airtime, Data, Electricity, Cable TV.
+- **Config**: `VTU_CONFIG` in `src/firebase/config.ts`.
+- **API Reference**: https://www.vtpass.com/rest-api
 
-### 2. Get Your API Keys
-Once registered, you will find your **API Key** and **Public Key** in your developer dashboard.
+### 2. Shago Payments (Gaming)
+- **Use for**: CODM, Free Fire, Mobile Legends, PUBG.
+- **Config**: `SHAGO_CONFIG` in `src/firebase/config.ts`.
+- **Note**: Requires a `Hash Key` from your Shago developer dashboard.
 
-### 3. Update `src/firebase/config.ts`
-Copy your keys into the `VTU_CONFIG` object in `src/firebase/config.ts`.
+### 3. Pay1st (Alternative VTU)
+- **Use for**: Competitive MTN/Glo data bundles.
+- **Config**: `PAY1ST_CONFIG` in `src/firebase/config.ts`.
+- **Integration**: We've included a server action `src/app/actions/pay1st.ts` ready for implementation if you wish to switch providers.
 
-### 4. Connect the API Call
-In `src/app/services/airtime/page.tsx` and `src/app/services/data/page.tsx`, look for the `handlePurchase` function. Replace the "SIMULATED API CALL" block with a real `fetch` request to your provider.
-
-**Example (VTpass):**
-```javascript
-const response = await fetch('https://api-service.vtpass.com/api/pay', {
-  method: 'POST',
-  headers: {
-    'api-key': VTU_CONFIG.API_KEY,
-    'public-key': VTU_CONFIG.PUBLIC_KEY,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    request_id: Date.now().toString(),
-    serviceID: selectedNetwork.toLowerCase(), // e.g., 'mtn'
-    billersCode: phoneNumber,
-    variation_code: 'airtime',
-    amount: purchaseAmount,
-    phone: phoneNumber
-  })
-});
-
-const result = await response.json();
-if (result.code !== '000') throw new Error('Network Delivery Failed');
-```
-
-### 5. Fund Your VTU Wallet
-Most providers require you to fund a separate wallet on *their* platform. They will deduct from that wallet whenever your app makes a successful API call.
+### How to Switch Providers
+To switch a service (e.g., Airtime) from VTpass to Pay1st:
+1. Open the service page (e.g., `src/app/services/airtime/page.tsx`).
+2. Import the Pay1st action: `import { processPay1stAirtime } from "@/app/actions/pay1st"`.
+3. Replace the `processPayment` call inside `handlePurchase` with your new action.
