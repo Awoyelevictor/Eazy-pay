@@ -1,6 +1,7 @@
 
 "use client";
 
+import { useState, useMemo } from "react";
 import { 
   Settings, 
   User, 
@@ -12,27 +13,51 @@ import {
   CheckCircle, 
   Loader2,
   Mail,
-  Key
+  Key,
+  Edit2,
+  Save,
+  Lock
 } from "lucide-react";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useUser, useAuth } from "@/firebase";
-import { signOut } from "firebase/auth";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useUser, useAuth, useFirestore, useDoc } from "@/firebase";
+import { signOut, updateProfile } from "firebase/auth";
+import { doc, updateDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-
-const menuItems = [
-  { icon: User, label: "Personal Information", desc: "Name, email, and basic info" },
-  { icon: Shield, label: "Security & KYC", desc: "Linked account and verification", status: "Verified" },
-  { icon: CreditCard, label: "Payment Methods", desc: "Manage cards and Paystack links" },
-  { icon: HelpCircle, label: "Support & Help", desc: "FAQs and contact support" },
-  { icon: Settings, label: "Settings", desc: "Notifications and app preferences" },
-];
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export default function ProfilePage() {
-  const { user, loading } = useUser();
+  const { user, loading: userLoading } = useUser();
   const auth = useAuth();
+  const firestore = useFirestore();
   const router = useRouter();
+  const { toast } = useToast();
+
+  const userRef = useMemo(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, "users", user.uid);
+  }, [firestore, user]);
+
+  const { data: profile, loading: profileLoading } = useDoc(userRef);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState({
+    displayName: "",
+    phoneNumber: "",
+    transactionPin: ""
+  });
+  const [isSaving, setIsEditingLoading] = useState(false);
 
   const handleSignOut = async () => {
     if (!auth) return;
@@ -40,7 +65,44 @@ export default function ProfilePage() {
     router.push("/");
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-primary" /></div>;
+  const handleEditInit = () => {
+    if (profile) {
+      setEditData({
+        displayName: profile.displayName || "",
+        phoneNumber: profile.phoneNumber || "",
+        transactionPin: profile.transactionPin || ""
+      });
+      setIsEditing(true);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!user || !userRef) return;
+    setIsEditingLoading(true);
+
+    try {
+      // 1. Update Auth Profile
+      await updateProfile(user, {
+        displayName: editData.displayName
+      });
+
+      // 2. Update Firestore Doc
+      await updateDoc(userRef, {
+        displayName: editData.displayName,
+        phoneNumber: editData.phoneNumber,
+        transactionPin: editData.transactionPin
+      });
+
+      toast({ title: "Profile Updated", description: "Your changes have been saved successfully." });
+      setIsEditing(false);
+    } catch (error: any) {
+      toast({ title: "Update Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsEditingLoading(false);
+    }
+  };
+
+  if (userLoading || profileLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-primary" /></div>;
   if (!user) return null;
 
   return (
@@ -73,6 +135,57 @@ export default function ProfilePage() {
       </header>
 
       <main className="px-6 py-8 space-y-6 max-w-xl mx-auto">
+        {/* Profile Actions */}
+        <div className="flex justify-center">
+          <Dialog open={isEditing} onOpenChange={setIsEditing}>
+            <DialogTrigger asChild>
+              <Button onClick={handleEditInit} className="rounded-full gap-2 font-bold bg-secondary text-primary hover:bg-secondary/80 border-none px-8">
+                <Edit2 size={16} /> Edit Profile & PIN
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="rounded-[2.5rem] sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-black">Edit Profile</DialogTitle>
+                <DialogDescription>Update your personal info and transaction security.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Full Name</Label>
+                  <Input 
+                    value={editData.displayName} 
+                    onChange={(e) => setEditData({...editData, displayName: e.target.value})}
+                    className="h-12 rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Phone Number</Label>
+                  <Input 
+                    value={editData.phoneNumber} 
+                    onChange={(e) => setEditData({...editData, phoneNumber: e.target.value})}
+                    className="h-12 rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Transaction PIN (4-6 digits)</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                    <Input 
+                      type="password"
+                      maxLength={6}
+                      value={editData.transactionPin} 
+                      onChange={(e) => setEditData({...editData, transactionPin: e.target.value.replace(/\D/g, '')})}
+                      className="h-12 pl-10 rounded-xl font-bold tracking-[0.5em]"
+                    />
+                  </div>
+                </div>
+                <Button className="w-full h-14 rounded-2xl font-black text-lg mt-4" onClick={handleSaveProfile} disabled={isSaving}>
+                  {isSaving ? <Loader2 className="animate-spin" /> : <><Save size={20} className="mr-2" /> Save Changes</>}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+
         {/* Authentication Summary */}
         <section className="space-y-3">
           <h2 className="text-xs font-black text-muted-foreground uppercase tracking-widest px-1">Account Authentication</h2>
@@ -85,7 +198,7 @@ export default function ProfilePage() {
                   </div>
                   <div>
                     <p className="text-[10px] font-black text-muted-foreground uppercase leading-none mb-1">Signed in via</p>
-                    <p className="text-sm font-bold">Google Auth</p>
+                    <p className="text-sm font-bold">Email & PIN</p>
                   </div>
                 </div>
                 <div className="px-2 py-1 rounded-lg bg-green-100 text-green-700 text-[10px] font-black uppercase">Active</div>
@@ -104,34 +217,6 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
         </section>
-
-        {/* Menu Items */}
-        <div className="space-y-3">
-          <h2 className="text-xs font-black text-muted-foreground uppercase tracking-widest px-1">General Settings</h2>
-          {menuItems.map((item) => (
-            <Card key={item.label} className="border-none shadow-sm hover:shadow-md transition-all cursor-pointer group rounded-3xl">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-2xl bg-secondary flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                    <item.icon size={22} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm">{item.label}</h3>
-                    <p className="text-xs text-muted-foreground">{item.desc}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {item.status && (
-                    <span className="text-[10px] font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
-                      {item.status}
-                    </span>
-                  )}
-                  <ChevronRight size={18} className="text-muted-foreground" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
 
         <Button 
           variant="destructive" 

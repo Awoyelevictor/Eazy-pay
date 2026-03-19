@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Lock, Loader2, ArrowRight, UserCircle, Smartphone, Mail } from "lucide-react";
+import { Lock, Loader2, ArrowRight, UserCircle, Smartphone, Mail, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +20,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPinScreen, setShowPinScreen] = useState(false);
-  const [isNewDevice, setIsNewDevice] = useState(true);
   
   const auth = useAuth();
   const firestore = useFirestore();
@@ -31,7 +30,6 @@ export default function LoginPage() {
     const savedEmail = localStorage.getItem("eazypay_last_email");
     if (savedEmail) {
       setEmail(savedEmail);
-      setIsNewDevice(false);
       setShowPinScreen(true);
     }
   }, []);
@@ -42,35 +40,12 @@ export default function LoginPage() {
     setShowPinScreen(true);
   };
 
-  const handleLogin = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!auth || !firestore || !email || !password) return;
-    setLoading(true);
-
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      localStorage.setItem("eazypay_last_email", email);
-      router.push("/dashboard");
-    } catch (error: any) {
-      toast({
-        title: "Login Failed",
-        description: "Invalid email or password. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // For users who use their PIN as a simplified password (or if they prefer)
   const handlePinLogin = async () => {
     if (!auth || !email || !pin) return;
     setLoading(true);
 
     try {
-      // We attempt login with the PIN. 
-      // If the user set their password as their PIN at signup, this works.
-      // If they have a separate password, they can toggle to the password screen.
+      // In this system, PIN acts as a secondary sign-in method or alternative password
       await signInWithEmailAndPassword(auth, email, pin);
       localStorage.setItem("eazypay_last_email", email);
       router.push("/dashboard");
@@ -117,6 +92,11 @@ export default function LoginPage() {
                 <Button type="submit" className="w-full h-16 rounded-3xl font-black text-xl shadow-xl shadow-primary/20">
                   Continue <ArrowRight className="ml-2" size={24} />
                 </Button>
+                <div className="text-center">
+                  <Link href="/auth/forgot-password">
+                    <button type="button" className="text-xs text-muted-foreground font-bold hover:text-primary transition-colors">Forgot Password?</button>
+                  </Link>
+                </div>
               </form>
             ) : (
               <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
@@ -155,7 +135,9 @@ export default function LoginPage() {
                       Use Different Account
                     </button>
                     <Link href="/auth/forgot-password">
-                      <button className="text-xs text-primary font-black uppercase tracking-widest">Forgot Security PIN?</button>
+                      <button className="text-xs text-primary font-black uppercase tracking-widest flex items-center justify-center gap-1 mx-auto">
+                        <Key size={12} /> Forgot Security PIN?
+                      </button>
                     </Link>
                   </div>
                 </div>

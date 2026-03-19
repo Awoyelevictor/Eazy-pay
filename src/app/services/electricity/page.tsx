@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
 import { processPayment, verifyMerchant } from "@/app/actions/vtpass";
+import { createAINotification } from "@/services/notification-service";
 
 const discoProviders = [
   { name: "Ikeja Electric (IKEDC)", vtuId: "ikeja-electric" },
@@ -112,6 +113,14 @@ export default function ElectricityPurchase() {
         createdAt: new Date().toISOString(),
       });
       
+      // AI Notification
+      createAINotification(
+        firestore,
+        user.uid,
+        `Successful payment of NGN ${payAmount.toLocaleString()} for ${selectedDisco.name} (${meterNumber})`,
+        user.displayName || ''
+      );
+
       setIsSuccess(true);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });

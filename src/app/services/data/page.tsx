@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
 import { processPayment } from "@/app/actions/vtpass";
+import { createAINotification } from "@/services/notification-service";
 
 const networks = [
   { name: "MTN", color: "bg-yellow-400", logo: "M", vtuId: "mtn-data" },
@@ -105,6 +106,14 @@ export default function DataPurchase() {
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
       
+      // AI Notification
+      createAINotification(
+        firestore,
+        user.uid,
+        `Successfully subscribed ${selectedBundle.name} for ${phoneNumber} on ${selectedNetwork.name}`,
+        user.displayName || ''
+      );
+
       setIsSuccess(true);
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });

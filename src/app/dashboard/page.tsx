@@ -81,19 +81,6 @@ export default function DashboardPage() {
       </header>
 
       <main className="px-6 py-6 max-w-4xl mx-auto space-y-8">
-        {/* Service Integration Warning */}
-        <Card className="bg-amber-50 border-amber-200 rounded-3xl border-2">
-           <CardContent className="p-4 flex items-center gap-4">
-              <div className="h-10 w-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 shrink-0">
-                 <AlertCircle size={24} />
-              </div>
-              <div>
-                 <p className="text-xs font-black text-amber-800 uppercase tracking-widest">Service Alert</p>
-                 <p className="text-[10px] text-amber-700 font-medium">Wallet funding is live via Paystack, but service delivery (Airtime/Data) is currently in Simulation Mode.</p>
-              </div>
-           </CardContent>
-        </Card>
-
         <section>
           <WalletCard />
         </section>
