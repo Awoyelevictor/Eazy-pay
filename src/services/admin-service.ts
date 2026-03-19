@@ -10,14 +10,23 @@ import {
   doc
 } from 'firebase/firestore';
 import { createAINotification } from './notification-service';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 /**
  * Fetch aggregated statistics for the admin dashboard.
- * Optimized to use parallel fetching for subcollections.
+ * Optimized to aggregate data across all users and handle permission errors.
  */
 export async function getGlobalStats(db: Firestore) {
   try {
-    const usersSnap = await getDocs(collection(db, 'users'));
+    const usersSnap = await getDocs(collection(db, 'users')).catch(async (err) => {
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
+        path: 'users',
+        operation: 'list'
+      }));
+      throw err;
+    });
+
     const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     
     if (users.length === 0) {
@@ -26,23 +35,31 @@ export async function getGlobalStats(db: Firestore) {
         transactionCount: 0,
         totalVolume: 0,
         activeBalance: 0,
-        successRate: '0%',
+        successRate: '100%',
         transactions: [],
         users: []
       };
     }
 
     let totalBalance = 0;
+    const allTransactions: any[] = [];
     
-    // Fetch all transactions in parallel to avoid long execution times
+    // Fetch all transactions in parallel
     const transactionPromises = users.map(async (user) => {
-      totalBalance += (user as any).balance || 0;
-      const txSnap = await getDocs(collection(db, 'users', user.id, 'transactions'));
-      return txSnap.docs.map(d => ({ id: d.id, userId: user.id, ...d.data() }));
+      const userData = user as any;
+      totalBalance += Number(userData.balance) || 0;
+      
+      try {
+        const txSnap = await getDocs(collection(db, 'users', user.id, 'transactions'));
+        const userTxs = txSnap.docs.map(d => ({ id: d.id, userId: user.id, ...d.data() }));
+        allTransactions.push(...userTxs);
+      } catch (e) {
+        // Log individual user fetch failures silently to let the rest of the dashboard load
+        console.warn(`Admin: Could not fetch transactions for user ${user.id}`);
+      }
     });
 
-    const results = await Promise.all(transactionPromises);
-    const allTransactions = results.flat();
+    await Promise.all(transactionPromises);
 
     const successTx = allTransactions.filter(t => t.status === 'success');
     const totalVolume = successTx.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
@@ -59,7 +76,7 @@ export async function getGlobalStats(db: Firestore) {
       transactions: allTransactions,
       users
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Global Stats Fetch Error:", error);
     throw error;
   }

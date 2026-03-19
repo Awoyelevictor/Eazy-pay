@@ -70,7 +70,7 @@ export default function AdminDashboard() {
       setStats(data);
     } catch (e: any) {
       console.error(e);
-      setError("Failed to fetch app statistics. Database may be busy.");
+      setError("Failed to fetch app statistics. Check Security Rules permissions.");
     } finally {
       setLoading(false);
     }
@@ -117,7 +117,7 @@ export default function AdminDashboard() {
       });
       setChatMessages(prev => [...prev, { role: 'model', text: result.response }]);
     } catch (e) {
-      toast({ title: "Assistant Error", description: "Check API availability.", variant: "destructive" });
+      toast({ title: "Assistant Error", description: "Check AI service availability.", variant: "destructive" });
     } finally {
       setAiLoading(false);
     }
@@ -152,6 +152,21 @@ export default function AdminDashboard() {
     </div>
   );
 
+  if (error) return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-8 gap-6 text-center">
+      <div className="h-20 w-20 bg-destructive/10 rounded-full flex items-center justify-center text-destructive">
+        <AlertCircle size={40} />
+      </div>
+      <div>
+        <h2 className="text-2xl font-black mb-2">Access Error</h2>
+        <p className="text-muted-foreground max-w-sm">{error}</p>
+      </div>
+      <Button onClick={fetchStats} className="rounded-2xl h-12 px-8">
+        <RefreshCcw className="mr-2 h-4 w-4" /> Retry Sync
+      </Button>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 sm:p-10">
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-10 gap-4">
@@ -164,7 +179,7 @@ export default function AdminDashboard() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" className="rounded-xl" onClick={fetchStats}>
-            <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
+            <RefreshCcw className="mr-2 h-4 w-4" /> Refresh Data
           </Button>
         </div>
       </header>
@@ -172,10 +187,10 @@ export default function AdminDashboard() {
       {/* Main Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
         {[
-          { label: 'Users', value: stats.userCount, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Events', value: stats.transactionCount, icon: Activity, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Volume', value: `₦${stats.totalVolume.toLocaleString()}`, icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
-          { label: 'Stability', value: stats.successRate, icon: BarChart3, color: 'text-purple-600', bg: 'bg-purple-50' },
+          { label: 'Total Users', value: stats?.userCount || 0, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: 'Transactions', value: stats?.transactionCount || 0, icon: Activity, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Total Volume', value: `₦${(stats?.totalVolume || 0).toLocaleString()}`, icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: 'Success Rate', value: stats?.successRate || '100%', icon: BarChart3, color: 'text-purple-600', bg: 'bg-purple-50' },
         ].map((item) => (
           <Card key={item.label} className="border-none shadow-sm rounded-3xl">
             <CardContent className="p-6 flex items-center gap-4">
@@ -198,18 +213,24 @@ export default function AdminDashboard() {
             <CardTitle className="text-xl font-black flex items-center gap-2"><BarChart3 size={20} /> Service Volume</CardTitle>
           </CardHeader>
           <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barChartData}>
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
-                <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                <Bar dataKey="value" radius={[10, 10, 0, 0]}>
-                  {barChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {barChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={barChartData}>
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
+                  <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                  <Bar dataKey="value" radius={[10, 10, 0, 0]}>
+                    {barChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground text-sm italic">
+                No transaction data to display.
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -219,24 +240,30 @@ export default function AdminDashboard() {
             <CardTitle className="text-xl font-black flex items-center gap-2"><PieIcon size={20} /> Success Ratio</CardTitle>
           </CardHeader>
           <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieChartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {pieChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.name === 'SUCCESS' ? '#10b981' : '#ef4444'} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            {pieChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {pieChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.name === 'SUCCESS' ? '#10b981' : '#ef4444'} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground text-sm italic">
+                Awaiting first events...
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -251,6 +278,12 @@ export default function AdminDashboard() {
             <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto space-y-4 px-6">
+            {chatMessages.length === 0 && (
+              <div className="text-center py-10 opacity-30">
+                <MessageSquare className="mx-auto mb-2" size={48} />
+                <p className="text-sm font-bold">Ask me about your app's performance</p>
+              </div>
+            )}
             {chatMessages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[80%] p-4 rounded-2xl text-sm ${
@@ -270,7 +303,7 @@ export default function AdminDashboard() {
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
               />
-              <Button type="submit" size="icon" className="absolute right-2 top-2 h-10 w-10" disabled={aiLoading}>
+              <Button type="submit" size="icon" className="absolute right-2 top-2 h-10 w-10" disabled={aiLoading || !stats}>
                 <Send size={18} />
               </Button>
             </form>
