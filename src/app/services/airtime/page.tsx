@@ -85,12 +85,21 @@ export default function AirtimePurchase() {
       return;
     }
 
+    if (VTU_CONFIG.PUBLIC_KEY.includes("REPLACE_WITH")) {
+      toast({
+        title: "Configuration Needed",
+        description: "Please add your VTpass Public Key to the configuration.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
       const requestId = generateRequestId();
       
-      // VTpass API CALL
+      // Real VTpass API CALL
       const response = await fetch(`${VTU_CONFIG.BASE_URL}/pay`, {
         method: 'POST',
         headers: {

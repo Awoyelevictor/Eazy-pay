@@ -20,15 +20,15 @@ const firebaseConfig = {
 export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83ace52";
 
 /** 
- * VTU PROVIDER CONFIGURATION
- * VTpass API Integration Keys
+ * VTPASS API CONFIGURATION
  * 
- * IMPORTANT: Replace 'your_actual_...' placeholders with your keys from the VTpass dashboard.
+ * IMPORTANT: You have provided the API Key. 
+ * Now generate and add your PUBLIC_KEY from the VTpass dashboard.
  */
 export const VTU_CONFIG = {
-  API_KEY: "your_actual_vtpass_api_key",
-  PUBLIC_KEY: "your_actual_vtpass_public_key",
-  BASE_URL: "https://vtpass.com/api", // Use https://sandbox.vtpass.com/api for testing
+  API_KEY: "384e1cf92f291f8bf76dc271e7b9f7fe",
+  PUBLIC_KEY: "REPLACE_WITH_YOUR_VTPASS_PUBLIC_KEY",
+  BASE_URL: "https://vtpass.com/api",
 };
 
 const app = getApps().length > 0 
