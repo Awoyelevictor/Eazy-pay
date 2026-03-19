@@ -13,7 +13,7 @@ import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { VTU_CONFIG } from "@/firebase/config";
+import { processPayment } from "@/app/actions/vtpass";
 
 const networks = [
   { name: "MTN", color: "bg-yellow-400", logo: "M", vtuId: "mtn" },
@@ -39,58 +39,33 @@ export default function AirtimePurchase() {
 
   const { data: profile } = useDoc(userRef);
 
-  // Helper to generate VTpass compliant request_id (YYYYMMDDHHIIxxxx)
   const generateRequestId = () => {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = (now.getMonth() + 1).toString().padStart(2, "0");
-    const day = now.getDate().toString().padStart(2, "0");
-    const hour = now.getHours().toString().padStart(2, "0");
-    const minute = now.getMinutes().toString().padStart(2, "0");
-    
-    // Generate a random 8-character alphanumeric string for the 'xxxx' part
-    const randomPart = Math.random().toString(36).substring(2, 10);
-    
-    return `${year}${month}${day}${hour}${minute}${randomPart}`;
+    const dateStr = now.getFullYear() + 
+                    (now.getMonth() + 1).toString().padStart(2, "0") + 
+                    now.getDate().toString().padStart(2, "0") + 
+                    now.getHours().toString().padStart(2, "0") + 
+                    now.getMinutes().toString().padStart(2, "0");
+    const randomStr = Math.random().toString(36).substring(2, 8);
+    return `${dateStr}${randomStr}`;
   };
 
   const handlePurchase = async () => {
     if (!user || !firestore || !userRef) return;
     
     if (!selectedNetwork || !phoneNumber || !amount) {
-      toast({
-        title: "Incomplete Details",
-        description: "Please select a network, enter a number, and specify an amount.",
-        variant: "destructive",
-      });
+      toast({ title: "Incomplete Details", variant: "destructive" });
       return;
     }
 
     const purchaseAmount = parseFloat(amount);
     if (isNaN(purchaseAmount) || purchaseAmount < 100) {
-      toast({
-        title: "Minimum Amount",
-        description: "Minimum airtime purchase is ₦100.",
-        variant: "destructive",
-      });
+      toast({ title: "Minimum Amount ₦100", variant: "destructive" });
       return;
     }
 
     if (profile && profile.balance < purchaseAmount) {
-      toast({
-        title: "Insufficient Balance",
-        description: "Please fund your wallet. You need ₦" + (purchaseAmount - (profile.balance || 0)) + " more.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (VTU_CONFIG.PUBLIC_KEY.includes("REPLACE_WITH")) {
-      toast({
-        title: "Configuration Needed",
-        description: "Please add your VTpass Public Key to the configuration.",
-        variant: "destructive",
-      });
+      toast({ title: "Insufficient Balance", variant: "destructive" });
       return;
     }
 
@@ -99,27 +74,15 @@ export default function AirtimePurchase() {
     try {
       const requestId = generateRequestId();
       
-      // Real VTpass API CALL
-      const response = await fetch(`${VTU_CONFIG.BASE_URL}/pay`, {
-        method: 'POST',
-        headers: {
-          'api-key': VTU_CONFIG.API_KEY,
-          'public-key': VTU_CONFIG.PUBLIC_KEY,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          request_id: requestId,
-          serviceID: selectedNetwork.vtuId,
-          amount: purchaseAmount,
-          phone: phoneNumber
-        })
+      const result = await processPayment({
+        request_id: requestId,
+        serviceID: selectedNetwork.vtuId,
+        amount: purchaseAmount,
+        phone: phoneNumber
       });
 
-      const result = await response.json();
-
-      // VTpass code "000" is success
       if (result.code !== '000') {
-        throw new Error(result.response_description || "Transaction failed at VTpass gateway");
+        throw new Error(result.response_description || "Transaction failed");
       }
 
       const transactionData = {
@@ -129,30 +92,18 @@ export default function AirtimePurchase() {
         recipient: phoneNumber,
         status: "success",
         requestId: requestId,
-        vtpassId: result.content?.transactions?.transactionId || "N/A",
         createdAt: new Date().toISOString(),
       };
 
-      // 1. Deduct from balance in Firestore
-      updateDoc(userRef, {
-        balance: increment(-purchaseAmount)
-      }).catch(async () => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: userRef.path,
-          operation: 'update',
-          requestResourceData: { balance: increment(-purchaseAmount) },
-        }));
-      });
-
-      // 2. Add transaction record
+      await updateDoc(userRef, { balance: increment(-purchaseAmount) });
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
       
       setIsSuccess(true);
     } catch (error: any) {
       toast({
-        title: "Delivery Failed",
-        description: error.message || "Network error during top-up. No money was deducted.",
+        title: "Purchase Error",
+        description: error.message,
         variant: "destructive"
       });
     } finally {
@@ -163,27 +114,14 @@ export default function AirtimePurchase() {
   if (isSuccess) {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-8 text-center">
-        <div className="h-24 w-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-8 animate-in zoom-in duration-500">
+        <div className="h-24 w-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-8">
           <CheckCircle2 size={56} className="animate-bounce" />
         </div>
         <h1 className="text-3xl font-black mb-3">Airtime Sent!</h1>
-        <p className="text-muted-foreground mb-4 max-w-xs mx-auto">
-          ₦{parseFloat(amount).toLocaleString()} has been sent to {phoneNumber} ({selectedNetwork?.name}).
-        </p>
+        <p className="text-muted-foreground mb-8">₦{amount} sent to {phoneNumber}.</p>
         <div className="w-full max-w-xs space-y-4">
-          <Button className="w-full rounded-2xl h-14 text-lg font-bold shadow-lg" onClick={() => {
-            setIsSuccess(false);
-            setAmount("");
-            setPhoneNumber("");
-            setSelectedNetwork(null);
-          }}>
-            Buy More
-          </Button>
-          <Link href="/dashboard" className="block">
-            <Button variant="outline" className="w-full rounded-2xl h-14 text-lg font-bold border-secondary">
-              Go to Dashboard
-            </Button>
-          </Link>
+          <Button className="w-full rounded-2xl h-14" onClick={() => setIsSuccess(false)}>Buy More</Button>
+          <Link href="/dashboard" className="block"><Button variant="outline" className="w-full rounded-2xl h-14">Dashboard</Button></Link>
         </div>
       </div>
     );
@@ -191,88 +129,71 @@ export default function AirtimePurchase() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="p-6 flex items-center gap-4 sticky top-0 bg-background/80 backdrop-blur-md z-10 border-b">
-        <Link href="/dashboard">
-          <Button variant="ghost" size="icon" className="rounded-full">
-            <ArrowLeft size={24} />
-          </Button>
-        </Link>
+      <header className="p-6 flex items-center gap-4 border-b sticky top-0 bg-background/80 backdrop-blur-md z-10">
+        <Link href="/dashboard"><Button variant="ghost" size="icon" className="rounded-full"><ArrowLeft size={24} /></Button></Link>
         <h1 className="text-xl font-black">Buy Airtime</h1>
       </header>
 
       <main className="px-6 py-8 space-y-8 max-w-xl mx-auto">
-        {/* Network Selection */}
         <section>
-          <Label className="text-sm font-bold mb-4 block text-muted-foreground uppercase tracking-wider">Select Network</Label>
+          <Label className="text-xs font-black mb-4 block text-muted-foreground uppercase tracking-widest">Select Network</Label>
           <div className="grid grid-cols-4 gap-4">
             {networks.map((net) => (
               <button
                 key={net.name}
                 onClick={() => setSelectedNetwork(net)}
-                className={`flex flex-col items-center gap-3 group p-3 rounded-3xl transition-all duration-300 ${
-                  selectedNetwork?.name === net.name 
-                    ? "bg-primary/10 ring-2 ring-primary shadow-lg" 
-                    : "bg-white border border-secondary hover:border-primary/40 shadow-sm"
+                className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${
+                  selectedNetwork?.name === net.name ? "bg-primary/5 border-primary" : "bg-white border-secondary"
                 }`}
               >
-                <div className={`h-14 w-14 rounded-2xl ${net.color} flex items-center justify-center text-white font-black text-2xl shadow-md group-hover:scale-110 transition-transform`}>
+                <div className={`h-12 w-12 rounded-xl ${net.color} flex items-center justify-center text-white font-black text-xl`}>
                   {net.logo}
                 </div>
-                <span className="text-[11px] font-bold text-foreground/80">{net.name}</span>
+                <span className="text-[10px] font-bold">{net.name}</span>
               </button>
             ))}
           </div>
         </section>
 
-        {/* Form */}
         <section className="space-y-6">
-          <div className="space-y-3">
-            <Label htmlFor="phone" className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Recipient Number</Label>
+          <div className="space-y-2">
+            <Label className="text-xs font-black uppercase text-muted-foreground">Recipient Number</Label>
             <Input
-              id="phone"
               type="tel"
               placeholder="080 0000 0000"
-              className="h-16 rounded-2xl bg-white border-secondary/80 focus-visible:ring-primary text-lg font-bold px-6 shadow-sm"
+              className="h-16 rounded-2xl font-bold text-lg"
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
             />
           </div>
 
-          <div className="space-y-3">
-            <Label htmlFor="amount" className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Amount (₦)</Label>
-            <div className="relative">
-               <span className="absolute left-6 top-1/2 -translate-y-1/2 font-bold text-lg text-muted-foreground">₦</span>
-               <Input
-                id="amount"
-                type="number"
-                placeholder="500"
-                className="h-16 rounded-2xl bg-white border-secondary/80 focus-visible:ring-primary text-lg font-bold pl-12 pr-6 shadow-sm"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-black uppercase text-muted-foreground">Amount (₦)</Label>
+            <Input
+              type="number"
+              placeholder="500"
+              className="h-16 rounded-2xl font-bold text-lg"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
           </div>
         </section>
 
-        <Card className="bg-primary/5 border-none shadow-none rounded-[2rem]">
+        <Card className="bg-primary/5 border-none rounded-[2rem]">
           <CardContent className="p-6 flex gap-4 text-primary">
-            <Info size={24} className="flex-shrink-0 mt-0.5" />
-            <div className="text-sm font-medium leading-relaxed">
-              <p>Wallet Balance: <span className="font-black">₦{profile?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || "0.00"}</span></p>
+            <Info size={24} className="flex-shrink-0" />
+            <div className="text-sm font-medium">
+              <p>Wallet Balance: <span className="font-black">₦{profile?.balance?.toLocaleString() || "0.00"}</span></p>
             </div>
           </CardContent>
         </Card>
 
         <Button 
-          className="w-full h-16 rounded-3xl text-xl font-black shadow-2xl shadow-primary/30 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-70" 
+          className="w-full h-16 rounded-3xl text-xl font-black shadow-2xl" 
           onClick={handlePurchase}
           disabled={isProcessing}
         >
-          {isProcessing ? (
-            <div className="flex items-center gap-3">
-              <Loader2 className="animate-spin" /> Authorizing Network...
-            </div>
-          ) : "Buy Airtime Now"}
+          {isProcessing ? <Loader2 className="animate-spin" /> : "Purchase Now"}
         </Button>
       </main>
     </div>
