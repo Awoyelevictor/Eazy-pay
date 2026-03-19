@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Info, Loader2, Wifi, Smartphone } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Info, Loader2, Wifi, Smartphone, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,8 +26,6 @@ const bundles = [
   { id: "2", label: "2GB / 30 Days", price: 600, value: "2GB" },
   { id: "3", label: "5GB / 30 Days", price: 1500, value: "5GB" },
   { id: "4", label: "10GB / 30 Days", price: 2900, value: "10GB" },
-  { id: "5", label: "20GB / 30 Days", price: 5500, value: "20GB" },
-  { id: "6", label: "40GB / 30 Days", price: 10000, value: "40GB" },
 ];
 
 export default function DataPurchase() {
@@ -47,32 +45,23 @@ export default function DataPurchase() {
 
   const { data: profile } = useDoc(userRef);
 
-  const handlePurchase = () => {
+  const handlePurchase = async () => {
     if (!user || !firestore || !userRef) return;
     
-    if (!selectedNetwork) {
-      toast({ title: "Select Network", description: "Please choose a network provider.", variant: "destructive" });
-      return;
-    }
-    if (!phoneNumber || phoneNumber.length < 11) {
-      toast({ title: "Invalid Number", description: "Please enter a valid 11-digit phone number.", variant: "destructive" });
-      return;
-    }
-    if (!selectedBundle) {
-      toast({ title: "Select Bundle", description: "Please choose a data plan.", variant: "destructive" });
+    if (!selectedNetwork || !phoneNumber || !selectedBundle) {
+      toast({ title: "Incomplete Details", variant: "destructive" });
       return;
     }
 
     if (profile && profile.balance < selectedBundle.price) {
-      toast({
-        title: "Insufficient Balance",
-        description: `You need ₦${(selectedBundle.price - profile.balance).toLocaleString()} more to buy this bundle.`,
-        variant: "destructive",
-      });
+      toast({ title: "Insufficient Balance", variant: "destructive" });
       return;
     }
 
     setIsProcessing(true);
+
+    // SIMULATED VTU API CALL
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     const transactionData = {
       type: "data",
@@ -81,10 +70,10 @@ export default function DataPurchase() {
       recipient: phoneNumber,
       service: selectedBundle.label,
       status: "success",
+      deliveryStatus: "simulated",
       createdAt: new Date().toISOString(),
     };
 
-    // 1. Deduct balance
     updateDoc(userRef, {
       balance: increment(-selectedBundle.price)
     }).catch(async () => {
@@ -95,7 +84,6 @@ export default function DataPurchase() {
       }));
     });
 
-    // 2. Add transaction
     const transactionsRef = collection(firestore, "users", user.uid, "transactions");
     addDoc(transactionsRef, transactionData)
       .then(() => {
@@ -118,16 +106,20 @@ export default function DataPurchase() {
         <div className="h-28 w-28 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-8 animate-in zoom-in duration-500">
           <CheckCircle2 size={64} className="animate-bounce" />
         </div>
-        <h1 className="text-3xl font-black mb-3">Data Active!</h1>
-        <p className="text-muted-foreground mb-10 max-w-xs mx-auto text-lg">
-          <span className="font-bold text-foreground">{selectedBundle?.value}</span> has been sent to <span className="font-bold text-foreground">{phoneNumber}</span> via {selectedNetwork}.
+        <h1 className="text-3xl font-black mb-3">Balance Deducted</h1>
+        <p className="text-muted-foreground mb-4 max-w-xs mx-auto text-lg">
+           ₦{selectedBundle?.price.toLocaleString()} removed for {selectedBundle?.value} plan.
         </p>
+        <Card className="bg-amber-50 border-amber-200 mb-10 max-w-xs mx-auto rounded-2xl">
+          <CardContent className="p-4 flex items-start gap-3 text-left">
+            <AlertTriangle className="text-amber-600 shrink-0" size={20} />
+            <p className="text-[10px] text-amber-800 font-medium">
+              <span className="font-bold">Test Mode:</span> This transaction was simulated. No real data was sent to the network.
+            </p>
+          </CardContent>
+        </Card>
         <div className="w-full max-w-xs space-y-4">
-          <Button className="w-full rounded-2xl h-16 text-lg font-bold shadow-xl shadow-primary/20" onClick={() => {
-            setIsSuccess(false);
-            setSelectedBundle(null);
-            setPhoneNumber("");
-          }}>
+          <Button className="w-full rounded-2xl h-16 text-lg font-bold shadow-xl shadow-primary/20" onClick={() => setIsSuccess(false)}>
             Buy Another Bundle
           </Button>
           <Link href="/dashboard" className="block">
@@ -142,7 +134,7 @@ export default function DataPurchase() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="p-6 flex items-center gap-4 sticky top-0 bg-background/80 backdrop-blur-lg z-10 border-b">
+      <header className="p-6 flex items-center gap-4 sticky top-0 bg-background/80 backdrop-blur-md z-10 border-b">
         <Link href="/dashboard">
           <Button variant="ghost" size="icon" className="rounded-full">
             <ArrowLeft size={24} />
@@ -152,6 +144,11 @@ export default function DataPurchase() {
       </header>
 
       <main className="px-6 py-8 space-y-8 max-w-xl mx-auto pb-24">
+        <div className="bg-amber-100 p-4 rounded-2xl flex items-center gap-4 border border-amber-200">
+           <AlertTriangle className="text-amber-600" />
+           <p className="text-xs font-bold text-amber-800">Note: Real balance will be deducted, but data delivery is simulated.</p>
+        </div>
+
         <section>
           <Label className="text-xs font-black mb-4 block text-muted-foreground uppercase tracking-widest">1. Choose Network</Label>
           <div className="grid grid-cols-4 gap-3">
@@ -162,10 +159,10 @@ export default function DataPurchase() {
                 className={`flex flex-col items-center gap-2 p-2 rounded-2xl transition-all border-2 ${
                   selectedNetwork === net.name 
                     ? "bg-primary/5 border-primary shadow-md scale-105" 
-                    : "bg-white border-transparent shadow-sm grayscale opacity-70 hover:grayscale-0 hover:opacity-100"
+                    : "bg-white border-transparent shadow-sm grayscale opacity-70"
                 }`}
               >
-                <div className={`h-12 w-12 rounded-xl ${net.color} flex items-center justify-center ${net.textColor} font-black text-xl shadow-sm`}>
+                <div className={`h-12 w-12 rounded-xl ${net.color} flex items-center justify-center ${net.textColor} font-black text-xl`}>
                   {net.logo}
                 </div>
                 <span className="text-[10px] font-bold">{net.name}</span>
@@ -183,9 +180,9 @@ export default function DataPurchase() {
                 id="phone"
                 type="tel"
                 placeholder="080 0000 0000"
-                className="h-16 rounded-2xl bg-white border-secondary text-lg font-bold pl-12 pr-6 shadow-sm focus:ring-primary"
+                className="h-16 rounded-2xl bg-white border-secondary text-lg font-bold pl-12 shadow-sm"
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 11))}
+                onChange={(e) => setPhoneNumber(e.target.value)}
               />
             </div>
           </div>
@@ -200,7 +197,7 @@ export default function DataPurchase() {
                   className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all ${
                     selectedBundle?.id === bundle.id 
                       ? "border-primary bg-primary/5 shadow-inner" 
-                      : "border-secondary bg-white hover:border-primary/20"
+                      : "border-secondary bg-white"
                   }`}
                 >
                   <div className="flex items-center gap-4">
@@ -230,11 +227,7 @@ export default function DataPurchase() {
           onClick={handlePurchase}
           disabled={isProcessing}
         >
-          {isProcessing ? (
-            <div className="flex items-center gap-3">
-              <Loader2 className="animate-spin" /> Provisioning...
-            </div>
-          ) : `Pay ₦${selectedBundle?.price.toLocaleString() || "0"}`}
+          {isProcessing ? <Loader2 className="animate-spin" /> : `Pay ₦${selectedBundle?.price.toLocaleString() || "0"}`}
         </Button>
       </main>
     </div>

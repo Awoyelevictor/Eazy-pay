@@ -3,7 +3,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Search, UserCircle, Zap, Loader2 } from "lucide-react";
+import { Bell, Search, UserCircle, Zap, Loader2, AlertCircle } from "lucide-react";
 import { WalletCard } from "@/components/dashboard/WalletCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { TransactionList } from "@/components/dashboard/TransactionList";
@@ -12,6 +12,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { useUser } from "@/firebase";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function DashboardPage() {
   const { user, loading } = useUser();
@@ -82,6 +83,19 @@ export default function DashboardPage() {
       </header>
 
       <main className="px-6 py-6 max-w-4xl mx-auto space-y-8">
+        {/* Service Integration Warning */}
+        <Card className="bg-amber-50 border-amber-200 rounded-3xl border-2">
+           <CardContent className="p-4 flex items-center gap-4">
+              <div className="h-10 w-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 shrink-0">
+                 <AlertCircle size={24} />
+              </div>
+              <div>
+                 <p className="text-xs font-black text-amber-800 uppercase tracking-widest">Service Alert</p>
+                 <p className="text-[10px] text-amber-700 font-medium">Wallet funding is live via Paystack, but service delivery (Airtime/Data) is currently in Simulation Mode.</p>
+              </div>
+           </CardContent>
+        </Card>
+
         <section>
           <WalletCard />
         </section>

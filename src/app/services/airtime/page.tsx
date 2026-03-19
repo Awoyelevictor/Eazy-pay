@@ -3,14 +3,14 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Info, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Info, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
-import { doc, collection, addDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore";
+import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -38,7 +38,7 @@ export default function AirtimePurchase() {
 
   const { data: profile } = useDoc(userRef);
 
-  const handlePurchase = () => {
+  const handlePurchase = async () => {
     if (!user || !firestore || !userRef) return;
     
     if (!selectedNetwork || !phoneNumber || !amount) {
@@ -71,25 +71,30 @@ export default function AirtimePurchase() {
 
     setIsProcessing(true);
 
+    // SIMULATED VTU API CALL
+    // In production, you would use 'fetch' to call your VTU provider's API here.
+    // e.g. await fetch('https://api.vtu-provider.com/buy', { method: 'POST', body: ... })
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     const transactionData = {
       type: "airtime",
       amount: purchaseAmount,
       network: selectedNetwork,
       recipient: phoneNumber,
       status: "success",
-      createdAt: new Date().toISOString(), // Using ISO string for consistency with Transaction schema
+      deliveryStatus: "simulated", // Marks that this was a test delivery
+      createdAt: new Date().toISOString(),
     };
 
     // 1. Deduct from balance
     updateDoc(userRef, {
       balance: increment(-purchaseAmount)
     }).catch(async () => {
-      const permissionError = new FirestorePermissionError({
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
         path: userRef.path,
         operation: 'update',
-        requestResourceData: { balance: (profile?.balance || 0) - purchaseAmount },
-      });
-      errorEmitter.emit('permission-error', permissionError);
+        requestResourceData: { balance: increment(-purchaseAmount) },
+      }));
     });
 
     // 2. Add transaction record
@@ -101,12 +106,11 @@ export default function AirtimePurchase() {
       })
       .catch(async () => {
         setIsProcessing(false);
-        const permissionError = new FirestorePermissionError({
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
           path: transactionsRef.path,
           operation: 'create',
           requestResourceData: transactionData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
+        }));
       });
   };
 
@@ -116,10 +120,18 @@ export default function AirtimePurchase() {
         <div className="h-24 w-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-8 animate-in zoom-in duration-500">
           <CheckCircle2 size={56} className="animate-bounce" />
         </div>
-        <h1 className="text-3xl font-black mb-3">Payment Successful!</h1>
-        <p className="text-muted-foreground mb-10 max-w-xs mx-auto">
-          ₦{parseFloat(amount).toLocaleString()} airtime has been credited to <span className="font-bold text-foreground">{phoneNumber}</span>.
+        <h1 className="text-3xl font-black mb-3">Balance Deducted</h1>
+        <p className="text-muted-foreground mb-4 max-w-xs mx-auto">
+          ₦{parseFloat(amount).toLocaleString()} has been removed from your wallet for {phoneNumber}.
         </p>
+        <Card className="bg-amber-50 border-amber-200 mb-10 max-w-xs mx-auto rounded-2xl">
+          <CardContent className="p-4 flex items-start gap-3 text-left">
+            <AlertTriangle className="text-amber-600 shrink-0" size={20} />
+            <p className="text-[10px] text-amber-800 font-medium">
+              <span className="font-bold">Note:</span> This is a simulated delivery. Real airtime was not sent because a VTU API is not yet connected to your project.
+            </p>
+          </CardContent>
+        </Card>
         <div className="w-full max-w-xs space-y-4">
           <Button className="w-full rounded-2xl h-14 text-lg font-bold shadow-lg" onClick={() => {
             setIsSuccess(false);
@@ -150,6 +162,12 @@ export default function AirtimePurchase() {
       </header>
 
       <main className="px-6 py-8 space-y-8 max-w-xl mx-auto">
+        <AlertTriangle className="text-amber-600 mx-auto" size={32} />
+        <div className="text-center space-y-2">
+           <h2 className="text-lg font-black text-amber-600">Development Mode</h2>
+           <p className="text-xs text-muted-foreground">Purchases will deduct real wallet balance but use a simulated network delivery.</p>
+        </div>
+
         {/* Network Selection */}
         <section>
           <Label className="text-sm font-bold mb-4 block text-muted-foreground uppercase tracking-wider">Select Network</Label>
@@ -200,27 +218,14 @@ export default function AirtimePurchase() {
                 onChange={(e) => setAmount(e.target.value)}
               />
             </div>
-            <div className="flex gap-2 mt-3 overflow-x-auto pb-2 no-scrollbar">
-              {["100", "200", "500", "1000", "2000", "5000"].map((preset) => (
-                <button
-                  key={preset}
-                  onClick={() => setAmount(preset)}
-                  className="px-5 py-2 rounded-full bg-secondary text-primary text-xs font-bold border border-primary/10 hover:bg-primary hover:text-white transition-all shadow-sm flex-shrink-0"
-                >
-                  ₦{preset}
-                </button>
-              ))}
-            </div>
           </div>
         </section>
 
-        {/* Info Card */}
         <Card className="bg-primary/5 border-none shadow-none rounded-[2rem]">
           <CardContent className="p-6 flex gap-4 text-primary">
             <Info size={24} className="flex-shrink-0 mt-0.5" />
             <div className="text-sm font-medium leading-relaxed">
               <p>Wallet Balance: <span className="font-black">₦{profile?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || "0.00"}</span></p>
-              <p className="mt-1 opacity-70 text-xs">Instantly receive 3% cashback on every airtime transaction.</p>
             </div>
           </CardContent>
         </Card>
@@ -232,7 +237,7 @@ export default function AirtimePurchase() {
         >
           {isProcessing ? (
             <div className="flex items-center gap-3">
-              <Loader2 className="animate-spin" /> Processing...
+              <Loader2 className="animate-spin" /> Authorizing...
             </div>
           ) : "Confirm Purchase"}
         </Button>
