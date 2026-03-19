@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Info, Loader2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,11 +42,16 @@ export default function AirtimePurchase() {
   // Helper to generate VTpass compliant request_id (YYYYMMDDHHIIxxxx)
   const generateRequestId = () => {
     const now = new Date();
-    const datePart = now.toISOString().slice(0, 10).replace(/-/g, "");
-    const hourPart = now.getHours().toString().padStart(2, "0");
-    const minPart = now.getMinutes().toString().padStart(2, "0");
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, "0");
+    const day = now.getDate().toString().padStart(2, "0");
+    const hour = now.getHours().toString().padStart(2, "0");
+    const minute = now.getMinutes().toString().padStart(2, "0");
+    
+    // Generate a random 8-character alphanumeric string for the 'xxxx' part
     const randomPart = Math.random().toString(36).substring(2, 10);
-    return `${datePart}${hourPart}${minPart}${randomPart}`;
+    
+    return `${year}${month}${day}${hour}${minute}${randomPart}`;
   };
 
   const handlePurchase = async () => {
@@ -74,7 +79,7 @@ export default function AirtimePurchase() {
     if (profile && profile.balance < purchaseAmount) {
       toast({
         title: "Insufficient Balance",
-        description: "Please fund your wallet. You need ₦" + (purchaseAmount - profile.balance) + " more.",
+        description: "Please fund your wallet. You need ₦" + (purchaseAmount - (profile.balance || 0)) + " more.",
         variant: "destructive",
       });
       return;
@@ -85,8 +90,7 @@ export default function AirtimePurchase() {
     try {
       const requestId = generateRequestId();
       
-      // REAL VTPASS API CALL
-      // Note: In a production environment, this should be handled via a proxy/server action to hide API keys
+      // VTpass API CALL
       const response = await fetch(`${VTU_CONFIG.BASE_URL}/pay`, {
         method: 'POST',
         headers: {
@@ -120,7 +124,7 @@ export default function AirtimePurchase() {
         createdAt: new Date().toISOString(),
       };
 
-      // 1. Deduct from balance locally in Firestore
+      // 1. Deduct from balance in Firestore
       updateDoc(userRef, {
         balance: increment(-purchaseAmount)
       }).catch(async () => {

@@ -22,11 +22,13 @@ export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83a
 /** 
  * VTU PROVIDER CONFIGURATION
  * VTpass API Integration Keys
+ * 
+ * IMPORTANT: Replace 'your_actual_...' placeholders with your keys from the VTpass dashboard.
  */
 export const VTU_CONFIG = {
   API_KEY: "your_actual_vtpass_api_key",
   PUBLIC_KEY: "your_actual_vtpass_public_key",
-  BASE_URL: "https://vtpass.com/api", // Switch to https://sandbox.vtpass.com/api for testing
+  BASE_URL: "https://vtpass.com/api", // Use https://sandbox.vtpass.com/api for testing
 };
 
 const app = getApps().length > 0 
