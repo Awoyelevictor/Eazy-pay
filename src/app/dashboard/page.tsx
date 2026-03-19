@@ -3,7 +3,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Search, UserCircle, Zap, Loader2, AlertCircle } from "lucide-react";
+import { Bell, Search, UserCircle, Zap, Loader2, AlertCircle, Settings } from "lucide-react";
 import { WalletCard } from "@/components/dashboard/WalletCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { TransactionList } from "@/components/dashboard/TransactionList";
@@ -72,10 +72,15 @@ export default function DashboardPage() {
             <p className="text-sm font-bold">{user.displayName || user.email?.split('@')[0] || "User"}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button className="h-10 w-10 rounded-full hover:bg-secondary flex items-center justify-center transition-colors">
             <Search size={20} className="text-muted-foreground" />
           </button>
+          <Link href="/profile">
+            <button className="h-10 w-10 rounded-full hover:bg-secondary flex items-center justify-center transition-colors">
+              <Settings size={20} className="text-muted-foreground" />
+            </button>
+          </Link>
           <NotificationDrawer />
         </div>
       </header>
