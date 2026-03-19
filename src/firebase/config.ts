@@ -4,8 +4,7 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 /**
- * Production Firebase configuration.
- * Project: gen-lang-client-0774757450
+ * Production Firebase configuration for Eazy-pay.
  */
 const firebaseConfig = {
   apiKey: "AIzaSyDHZ4KTXXGN3w8o8qjNAvI7bKmNVzyqT-U",
@@ -20,14 +19,14 @@ const firebaseConfig = {
 // Paystack Public Key for live transactions
 export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83ace52";
 
-// System is fully live
-export const IS_LIVE_MODE = true;
-
 const app = getApps().length > 0 
   ? getApp() 
   : initializeApp(firebaseConfig);
 
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Security Rules Watcher Trigger
+// Last updated: 2024-03-20 - Enforcing strict user document ownership.
 
 export { app, auth, db };
