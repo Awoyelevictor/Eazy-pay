@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Info, Loader2, Wifi, Smartphone, AlertTriangle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Info, Loader2, Wifi, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,20 +22,43 @@ const networks = [
   { name: "9mobile", color: "bg-emerald-900", logo: "9", textColor: "text-white", vtuId: "etisalat-data" },
 ];
 
-// Note: These variation_codes will be refined once you provide the Data documentation
-const bundles = [
-  { id: "1", label: "1GB / 30 Days", price: 300, value: "1GB", variation: "mtn-1gb-30day" },
-  { id: "2", label: "2GB / 30 Days", price: 600, value: "2GB", variation: "mtn-2gb-30day" },
-  { id: "5", label: "5GB / 30 Days", price: 1500, value: "5GB", variation: "mtn-5gb-30day" },
-  { id: "10", label: "10GB / 30 Days", price: 2900, value: "10GB", variation: "mtn-10gb-30day" },
-];
+const networkBundles: Record<string, Array<{ id: string, label: string, price: number, variation: string }>> = {
+  "MTN": [
+    { id: "m1", variation: "mtn-100mb-1000", label: "1.5GB / 30 Days", price: 1000 },
+    { id: "m2", variation: "mtn-500mb-2000", label: "4.5GB / 30 Days", price: 2000 },
+    { id: "m3", variation: "mtn-3gb-2500", label: "6GB / 30 Days", price: 2500 },
+    { id: "m4", variation: "mtn-data-3000", label: "8GB / 30 Days", price: 3000 },
+    { id: "m5", variation: "mtn-1gb-3500", label: "10GB / 30 Days", price: 3500 },
+    { id: "m6", variation: "mtn-100hr-5000", label: "15GB / 30 Days", price: 5000 },
+  ],
+  "Airtel": [
+    { id: "a1", variation: "airt-1000", label: "1.5GB / 30 Days", price: 1000 },
+    { id: "a2", variation: "airt-2000", label: "4.5GB / 30 Days", price: 2000 },
+    { id: "a3", variation: "airt-3000", label: "8GB / 30 Days", price: 3000 },
+    { id: "a4", variation: "airt-5000", label: "15GB / 30 Days", price: 5000 },
+    { id: "a5", variation: "airt-10000", label: "40GB / 30 Days", price: 10000 },
+  ],
+  "Glo": [
+    { id: "g1", variation: "glo1000", label: "2.5GB / 30 Days", price: 1000 },
+    { id: "g2", variation: "glo2000", label: "5.8GB / 30 Days", price: 2000 },
+    { id: "g3", variation: "glo2500", label: "7.7GB / 30 Days", price: 2500 },
+    { id: "g4", variation: "glo3000", label: "10GB / 30 Days", price: 3000 },
+    { id: "g5", variation: "glo5000", label: "18.25GB / 30 Days", price: 5000 },
+  ],
+  "9mobile": [
+    { id: "e1", variation: "eti-1000", label: "1.5GB / 30 Days", price: 1000 },
+    { id: "e2", variation: "eti-2000", label: "4.5GB / 30 Days", price: 2000 },
+    { id: "e3", variation: "eti-5000", label: "15GB / 30 Days", price: 5000 },
+    { id: "e4", variation: "eti-10000", label: "40GB / 30 Days", price: 10000 },
+  ]
+};
 
 export default function DataPurchase() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [selectedNetwork, setSelectedNetwork] = useState<typeof networks[0] | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [selectedBundle, setSelectedBundle] = useState<typeof bundles[0] | null>(null);
+  const [selectedBundle, setSelectedBundle] = useState<any | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const { toast } = useToast();
@@ -46,6 +69,11 @@ export default function DataPurchase() {
   }, [firestore, user]);
 
   const { data: profile } = useDoc(userRef);
+
+  const availableBundles = useMemo(() => {
+    if (!selectedNetwork) return [];
+    return networkBundles[selectedNetwork.name] || [];
+  }, [selectedNetwork]);
 
   const generateRequestId = () => {
     const now = new Date();
@@ -62,17 +90,17 @@ export default function DataPurchase() {
     if (!user || !firestore || !userRef) return;
     
     if (!selectedNetwork || !phoneNumber || !selectedBundle) {
-      toast({ title: "Incomplete Details", variant: "destructive" });
+      toast({ title: "Incomplete Details", description: "Select network, bundle and enter phone number.", variant: "destructive" });
       return;
     }
 
     if (profile && profile.balance < selectedBundle.price) {
-      toast({ title: "Insufficient Balance", variant: "destructive" });
+      toast({ title: "Insufficient Balance", description: "Please fund your wallet first.", variant: "destructive" });
       return;
     }
 
     if (VTU_CONFIG.PUBLIC_KEY.includes("REPLACE_WITH")) {
-      toast({ title: "Public Key Required", description: "Generate your Public Key in VTpass dashboard.", variant: "destructive" });
+      toast({ title: "Live Mode Inactive", description: "Public Key is required for delivery.", variant: "destructive" });
       return;
     }
 
@@ -94,14 +122,14 @@ export default function DataPurchase() {
           billersCode: phoneNumber,
           variation_code: selectedBundle.variation,
           amount: selectedBundle.price,
-          phone: phoneNumber
+          phone: user.phoneNumber || phoneNumber
         })
       });
 
       const result = await response.json();
 
       if (result.code !== '000') {
-        throw new Error(result.response_description || "Network Provider Error");
+        throw new Error(result.response_description || "Transaction failed at network gateway");
       }
 
       const transactionData = {
@@ -112,9 +140,11 @@ export default function DataPurchase() {
         service: selectedBundle.label,
         status: "success",
         requestId: requestId,
+        vtpassId: result.content?.transactions?.transactionId || "N/A",
         createdAt: new Date().toISOString(),
       };
 
+      // 1. Deduct balance
       updateDoc(userRef, {
         balance: increment(-selectedBundle.price)
       }).catch(async () => {
@@ -125,14 +155,15 @@ export default function DataPurchase() {
         }));
       });
 
+      // 2. Add transaction record
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
       
       setIsSuccess(true);
     } catch (error: any) {
       toast({
-        title: "Delivery Failed",
-        description: error.message || "Failed to process data bundle.",
+        title: "Network Delivery Failed",
+        description: error.message || "Network error. Try again later.",
         variant: "destructive"
       });
     } finally {
@@ -146,13 +177,17 @@ export default function DataPurchase() {
         <div className="h-28 w-28 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-8 animate-in zoom-in duration-500">
           <CheckCircle2 size={64} className="animate-bounce" />
         </div>
-        <h1 className="text-3xl font-black mb-3">Data Subscription Success!</h1>
+        <h1 className="text-3xl font-black mb-3">Data Sent Successfully!</h1>
         <p className="text-muted-foreground mb-10 max-w-xs mx-auto text-lg">
-           {selectedBundle?.value} has been sent to {phoneNumber}.
+           {selectedBundle?.label} has been credited to {phoneNumber}.
         </p>
         <div className="w-full max-w-xs space-y-4">
-          <Button className="w-full rounded-2xl h-16 text-lg font-bold shadow-xl shadow-primary/20" onClick={() => setIsSuccess(false)}>
-            Buy Another Bundle
+          <Button className="w-full rounded-2xl h-16 text-lg font-bold shadow-xl shadow-primary/20" onClick={() => {
+            setIsSuccess(false);
+            setPhoneNumber("");
+            setSelectedBundle(null);
+          }}>
+            New Purchase
           </Button>
           <Link href="/dashboard" className="block">
             <Button variant="outline" className="w-full rounded-2xl h-16 text-lg font-bold border-secondary">
@@ -182,14 +217,17 @@ export default function DataPurchase() {
             {networks.map((net) => (
               <button
                 key={net.name}
-                onClick={() => setSelectedNetwork(net)}
+                onClick={() => {
+                  setSelectedNetwork(net);
+                  setSelectedBundle(null);
+                }}
                 className={`flex flex-col items-center gap-2 p-2 rounded-2xl transition-all border-2 ${
                   selectedNetwork?.name === net.name 
                     ? "bg-primary/5 border-primary shadow-md scale-105" 
                     : "bg-white border-transparent shadow-sm grayscale opacity-70"
                 }`}
               >
-                <div className={`h-12 w-12 rounded-xl ${net.color} flex items-center justify-center ${net.textColor} font-black text-xl`}>
+                <div className={`h-12 w-12 rounded-xl ${net.color} flex items-center justify-center ${net.textColor} font-black text-xl shadow-sm`}>
                   {net.logo}
                 </div>
                 <span className="text-[10px] font-bold">{net.name}</span>
@@ -198,47 +236,49 @@ export default function DataPurchase() {
           </div>
         </section>
 
-        <section className="space-y-6">
-          <div className="space-y-3">
-            <Label htmlFor="phone" className="text-xs font-black text-muted-foreground uppercase tracking-widest">2. Destination Number</Label>
-            <div className="relative">
-              <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="080 0000 0000"
-                className="h-16 rounded-2xl bg-white border-secondary text-lg font-bold pl-12 shadow-sm"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-              />
+        {selectedNetwork && (
+          <section className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="space-y-3">
+              <Label htmlFor="phone" className="text-xs font-black text-muted-foreground uppercase tracking-widest">2. Destination Number</Label>
+              <div className="relative">
+                <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="080 0000 0000"
+                  className="h-16 rounded-2xl bg-white border-secondary text-lg font-bold pl-12 shadow-sm"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-3">
-            <Label className="text-xs font-black text-muted-foreground uppercase tracking-widest">3. Select a Plan</Label>
-            <div className="grid grid-cols-1 gap-3">
-              {bundles.map((bundle) => (
-                <button
-                  key={bundle.id}
-                  onClick={() => setSelectedBundle(bundle)}
-                  className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all ${
-                    selectedBundle?.id === bundle.id 
-                      ? "border-primary bg-primary/5 shadow-inner" 
-                      : "border-secondary bg-white"
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2 rounded-lg ${selectedBundle?.id === bundle.id ? "bg-primary text-white" : "bg-secondary text-primary"}`}>
-                       <Wifi size={18} />
+            <div className="space-y-3">
+              <Label className="text-xs font-black text-muted-foreground uppercase tracking-widest">3. Select a Bundle</Label>
+              <div className="grid grid-cols-1 gap-3">
+                {availableBundles.map((bundle) => (
+                  <button
+                    key={bundle.id}
+                    onClick={() => setSelectedBundle(bundle)}
+                    className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all ${
+                      selectedBundle?.id === bundle.id 
+                        ? "border-primary bg-primary/5 shadow-inner" 
+                        : "border-secondary bg-white hover:border-primary/30"
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`p-2 rounded-lg ${selectedBundle?.id === bundle.id ? "bg-primary text-white" : "bg-secondary text-primary"}`}>
+                         <Wifi size={18} />
+                      </div>
+                      <span className="font-bold text-sm">{bundle.label}</span>
                     </div>
-                    <span className="font-bold text-sm">{bundle.label}</span>
-                  </div>
-                  <span className="font-black text-lg text-primary">₦{bundle.price.toLocaleString()}</span>
-                </button>
-              ))}
+                    <span className="font-black text-lg text-primary">₦{bundle.price.toLocaleString()}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         <Card className="bg-primary/5 border-none rounded-[2rem] shadow-none">
           <CardContent className="p-6 flex gap-4 text-primary items-center">
@@ -252,9 +292,9 @@ export default function DataPurchase() {
         <Button 
           className="w-full h-16 rounded-3xl text-xl font-black shadow-2xl shadow-primary/30 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50" 
           onClick={handlePurchase}
-          disabled={isProcessing}
+          disabled={isProcessing || !selectedBundle}
         >
-          {isProcessing ? <Loader2 className="animate-spin" /> : `Pay ₦${selectedBundle?.price.toLocaleString() || "0"}`}
+          {isProcessing ? <Loader2 className="animate-spin" /> : `Subscribe Now (₦${selectedBundle?.price.toLocaleString() || "0"})`}
         </Button>
       </main>
     </div>
