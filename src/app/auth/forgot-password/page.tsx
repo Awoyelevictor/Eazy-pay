@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Mail, ArrowLeft, Loader2, Send } from "lucide-react";
+import { Mail, ArrowLeft, Loader2, Send, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,11 +30,12 @@ export default function ForgotPasswordPage() {
       setSent(true);
       toast({
         title: "Reset Link Sent",
-        description: "Check your email for instructions to reset your password/PIN.",
+        description: "Check your email for instructions to reset your password.",
       });
     } catch (error: any) {
+      console.error("Reset Error:", error);
       toast({
-        title: "Error",
+        title: "Reset Failed",
         description: error.message,
         variant: "destructive",
       });
@@ -66,33 +67,51 @@ export default function ForgotPasswordPage() {
                     <Input 
                       type="email" 
                       placeholder="name@example.com"
-                      className="h-14 pl-12 rounded-2xl bg-secondary/30 border-none"
+                      className="h-14 pl-12 rounded-2xl bg-secondary/30 border-none font-medium"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
                     />
                   </div>
                 </div>
-                <Button type="submit" className="w-full h-14 rounded-2xl font-bold text-lg" disabled={loading}>
+                <Button type="submit" className="w-full h-14 rounded-2xl font-bold text-lg shadow-xl shadow-primary/20" disabled={loading}>
                   {loading ? <Loader2 className="animate-spin" /> : (
                     <>Send Reset Link <Send className="ml-2" size={18} /></>
                   )}
                 </Button>
               </form>
             ) : (
-              <div className="text-center py-4 space-y-4">
-                <div className="h-16 w-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="text-center py-4 space-y-6">
+                <div className="h-16 w-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-2">
                   <Send size={32} />
                 </div>
-                <h3 className="text-xl font-bold">Check Your Email</h3>
-                <p className="text-sm text-muted-foreground">
-                  We've sent recovery instructions to <span className="font-bold text-foreground">{email}</span>.
-                </p>
-                <Link href="/auth/login">
-                  <Button variant="outline" className="w-full mt-4 rounded-2xl h-12 border-secondary">
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black">Check Your Email</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Recovery instructions sent to: <br/>
+                    <span className="font-bold text-foreground">{email}</span>
+                  </p>
+                </div>
+
+                <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-start gap-3 text-left">
+                  <AlertTriangle className="text-amber-600 shrink-0" size={18} />
+                  <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
+                    <span className="font-bold">Important:</span> If you don't see the email, check your <span className="font-bold">Spam/Junk</span> folder. It can take up to 2 minutes to arrive.
+                  </p>
+                </div>
+
+                <Link href="/auth/login" className="block w-full">
+                  <Button variant="outline" className="w-full rounded-2xl h-14 border-secondary font-bold">
                     Return to Login
                   </Button>
                 </Link>
+                
+                <button 
+                  onClick={() => setSent(false)}
+                  className="text-xs font-bold text-primary hover:underline"
+                >
+                  Didn't get it? Try again
+                </button>
               </div>
             )}
           </CardContent>
