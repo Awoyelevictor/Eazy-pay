@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Info, Loader2, Wifi, Smartphone } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,17 +26,21 @@ const networkBundles: Record<string, any[]> = {
     { variation: "mtn-100mb-1000", name: "1.5GB / 30 Days", amount: 1000 },
     { variation: "mtn-500mb-2000", name: "4.5GB / 30 Days", amount: 2000 },
     { variation: "mtn-data-3000", name: "8GB / 30 Days", amount: 3000 },
+    { variation: "mtn-40gb-10000", name: "40GB / 30 Days", amount: 10000 },
   ],
   "Airtel": [
     { variation: "airt-1000", name: "1.5GB / 30 Days", amount: 1000 },
     { variation: "airt-2000", name: "4.5GB / 30 Days", amount: 2000 },
+    { variation: "airt-5000", name: "15GB / 30 Days", amount: 5000 },
   ],
   "Glo": [
     { variation: "glo1000", name: "2.5GB / 30 Days", amount: 1000 },
     { variation: "glo2000", name: "5.8GB / 30 Days", amount: 2000 },
+    { variation: "glo3000", name: "10GB / 30 Days", amount: 3000 },
   ],
   "9mobile": [
     { variation: "eti-1000", name: "1.5GB / 30 Days", amount: 1000 },
+    { variation: "eti-2000", name: "4.5GB / 30 Days", amount: 2000 },
   ]
 };
 
@@ -63,7 +67,14 @@ export default function DataPurchase() {
   }, [selectedNetwork]);
 
   const generateRequestId = () => {
-    return Date.now().toString() + Math.random().toString(36).substring(2, 7);
+    const now = new Date();
+    const dateStr = now.getFullYear() + 
+                    (now.getMonth() + 1).toString().padStart(2, "0") + 
+                    now.getDate().toString().padStart(2, "0") + 
+                    now.getHours().toString().padStart(2, "0") + 
+                    now.getMinutes().toString().padStart(2, "0");
+    const randomDigits = Math.floor(1000000 + Math.random() * 9000000); 
+    return `${dateStr}${randomDigits}`;
   };
 
   const handlePurchase = async () => {
@@ -91,6 +102,10 @@ export default function DataPurchase() {
         throw new Error(result.response_description || "Subscription failed");
       }
 
+      // 1. Deduct balance
+      await updateDoc(userRef, { balance: increment(-selectedBundle.amount) });
+
+      // 2. Log transaction
       const transactionData = {
         type: "data",
         amount: selectedBundle.amount,
@@ -101,13 +116,11 @@ export default function DataPurchase() {
         requestId: requestId,
         createdAt: new Date().toISOString(),
       };
-
-      await updateDoc(userRef, { balance: increment(-selectedBundle.amount) });
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
       
-      // AI Notification
-      createAINotification(
+      // 3. AI Notification (Awaited)
+      await createAINotification(
         firestore,
         user.uid,
         `Successfully subscribed ${selectedBundle.name} for ${phoneNumber} on ${selectedNetwork.name}`,
@@ -116,6 +129,7 @@ export default function DataPurchase() {
 
       setIsSuccess(true);
     } catch (error: any) {
+      console.error("Data Purchase Error:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
       setIsProcessing(false);

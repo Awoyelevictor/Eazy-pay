@@ -8,7 +8,7 @@ import { VTU_CONFIG } from "@/firebase/config";
  * This prevents CORS issues and hides API keys from the client.
  */
 async function vtpassFetch(endpoint: string, method: 'GET' | 'POST', body?: any) {
-  const headers = {
+  const headers: any = {
     'api-key': VTU_CONFIG.API_KEY,
     'public-key': VTU_CONFIG.PUBLIC_KEY,
     'Content-Type': 'application/json',
@@ -28,12 +28,22 @@ async function vtpassFetch(endpoint: string, method: 'GET' | 'POST', body?: any)
   }
 
   try {
+    console.log(`VTPASS REQUEST [${method}] ${endpoint}:`, body ? JSON.stringify(body) : 'No Body');
+    
     const response = await fetch(url, options);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`VTPASS HTTP ERROR (${response.status}):`, errorText);
+      throw new Error(`Gateway Error: ${response.status}`);
+    }
+
     const data = await response.json();
+    console.log(`VTPASS RESPONSE [${endpoint}]:`, JSON.stringify(data));
     return data;
-  } catch (error) {
-    console.error(`VTpass API Error (${endpoint}):`, error);
-    throw new Error("Could not connect to VTpass gateway");
+  } catch (error: any) {
+    console.error(`VTpass Connection Failure (${endpoint}):`, error.message);
+    throw new Error(error.message || "Could not connect to VTpass gateway");
   }
 }
 

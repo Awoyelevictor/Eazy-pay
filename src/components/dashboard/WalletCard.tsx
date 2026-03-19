@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Eye, EyeOff, Plus, ArrowUpRight, Loader2, Sparkles } from "lucide-react";
+import { Eye, EyeOff, Plus, ArrowUpRight, Loader2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useUser, useDoc, useFirestore } from "@/firebase";
@@ -43,6 +43,9 @@ export function WalletCard() {
       };
       
       setDoc(userRef, initialData, { merge: true })
+        .then(() => {
+           createAINotification(firestore, user.uid, "Welcome to Eazy-pay! Your wallet is now active.", user.displayName || '');
+        })
         .catch(async () => {
           const permissionError = new FirestorePermissionError({
             path: userRef.path,
@@ -51,9 +54,6 @@ export function WalletCard() {
           });
           errorEmitter.emit('permission-error', permissionError);
         });
-      
-      // Notify about account activation
-      createAINotification(firestore, user.uid, "Welcome to Eazy-pay! Your wallet is now active.", user.displayName || '');
     }
   }, [user, profile, loading, firestore, userRef]);
 
@@ -77,50 +77,43 @@ export function WalletCard() {
         email: user.email,
         amount: amount * 100, // Paystack works in kobo
         currency: "NGN",
-        callback: function (response: any) {
-          // 1. Deduct balance in Firestore
-          updateDoc(userRef, {
-            balance: increment(amount)
-          }).catch(async () => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-              path: userRef.path,
-              operation: 'update',
-              requestResourceData: { balance: increment(amount) }
-            }));
-          });
+        callback: async function (response: any) {
+          try {
+            // 1. Update balance in Firestore
+            await updateDoc(userRef, {
+              balance: increment(amount)
+            });
 
-          // 2. Add transaction record
-          const transactionData = {
-            type: "funding",
-            amount: amount,
-            service: "Wallet Fund (Paystack)",
-            status: "success",
-            createdAt: new Date().toISOString(),
-            reference: response.reference
-          };
+            // 2. Add transaction record
+            const transactionData = {
+              type: "funding",
+              amount: amount,
+              service: "Wallet Fund (Paystack)",
+              status: "success",
+              createdAt: new Date().toISOString(),
+              reference: response.reference
+            };
 
-          const transactionsRef = collection(firestore, "users", user.uid, "transactions");
-          addDoc(transactionsRef, transactionData).catch(async () => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-              path: transactionsRef.path,
-              operation: 'create',
-              requestResourceData: transactionData
-            }));
-          });
+            const transactionsRef = collection(firestore, "users", user.uid, "transactions");
+            await addDoc(transactionsRef, transactionData);
 
-          // 3. Create AI Notification
-          createAINotification(
-            firestore, 
-            user.uid, 
-            `Successfully funded wallet with NGN ${amount.toLocaleString()}`,
-            user.displayName || ''
-          );
+            // 3. Create AI Notification (Awaited)
+            await createAINotification(
+              firestore, 
+              user.uid, 
+              `Successfully funded wallet with NGN ${amount.toLocaleString()}`,
+              user.displayName || ''
+            );
 
-          toast({ 
-            title: "Funding Successful!", 
-            description: `₦${amount.toLocaleString()} added to your balance.`,
-          });
-          setIsFunding(false);
+            toast({ 
+              title: "Funding Successful!", 
+              description: `₦${amount.toLocaleString()} added to your balance.`,
+            });
+          } catch (e) {
+            console.error("Funding Callback Error:", e);
+          } finally {
+            setIsFunding(false);
+          }
         },
         onClose: function () {
           setIsFunding(false);

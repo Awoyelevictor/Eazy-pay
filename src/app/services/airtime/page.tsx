@@ -45,8 +45,8 @@ export default function AirtimePurchase() {
                     now.getDate().toString().padStart(2, "0") + 
                     now.getHours().toString().padStart(2, "0") + 
                     now.getMinutes().toString().padStart(2, "0");
-    const randomStr = Math.random().toString(36).substring(2, 8);
-    return `${dateStr}${randomStr}`;
+    const randomDigits = Math.floor(1000000 + Math.random() * 9000000); // 7 random digits
+    return `${dateStr}${randomDigits}`;
   };
 
   const handlePurchase = async () => {
@@ -84,6 +84,10 @@ export default function AirtimePurchase() {
         throw new Error(result.response_description || "Transaction failed");
       }
 
+      // 1. Deduct balance
+      await updateDoc(userRef, { balance: increment(-purchaseAmount) });
+
+      // 2. Log transaction
       const transactionData = {
         type: "airtime",
         amount: purchaseAmount,
@@ -93,13 +97,11 @@ export default function AirtimePurchase() {
         requestId: requestId,
         createdAt: new Date().toISOString(),
       };
-
-      await updateDoc(userRef, { balance: increment(-purchaseAmount) });
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
       
-      // Notify user with AI message
-      createAINotification(
+      // 3. Notify user with AI message (Awaited for reliability)
+      await createAINotification(
         firestore, 
         user.uid, 
         `Successfully purchased NGN ${purchaseAmount} ${selectedNetwork.name} airtime for ${phoneNumber}`,
@@ -108,14 +110,15 @@ export default function AirtimePurchase() {
 
       setIsSuccess(true);
     } catch (error: any) {
+      console.error("Purchase Error:", error);
       toast({
         title: "Purchase Error",
         description: error.message,
         variant: "destructive"
       });
       
-      // Notify about failure
-      createAINotification(
+      // Notify about failure (Awaited for reliability)
+      await createAINotification(
         firestore, 
         user.uid, 
         `Airtime purchase of NGN ${amount} failed: ${error.message}`,
