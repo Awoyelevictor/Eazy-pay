@@ -11,6 +11,7 @@ async function vtpassFetch(endpoint: string, method: 'GET' | 'POST', body?: any)
   const headers: any = {
     'api-key': VTU_CONFIG.API_KEY,
     'public-key': VTU_CONFIG.PUBLIC_KEY,
+    'secret-key': VTU_CONFIG.SECRET_KEY, // Added secret key for enhanced authorization
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
@@ -51,7 +52,7 @@ export async function processPayment(payload: any) {
   return await vtpassFetch('/pay', 'POST', payload);
 }
 
-export async function verifyMerchant(payload: { billersCode: string; serviceID: string; type: string }) {
+export async function verifyMerchant(payload: { billersCode: string; serviceID: string; type?: string }) {
   return await vtpassFetch('/merchant-verify', 'POST', payload);
 }
 

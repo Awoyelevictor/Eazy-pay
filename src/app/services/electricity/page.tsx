@@ -88,13 +88,14 @@ export default function ElectricityPurchase() {
     setIsProcessing(true);
 
     try {
+      const requestId = Date.now().toString();
       const result = await processPayment({
-        request_id: Date.now().toString(),
+        request_id: requestId,
         serviceID: selectedDisco.vtuId,
         billersCode: meterNumber,
         variation_code: meterType,
         amount: payAmount,
-        phone: user.email || "08000000000"
+        phone: profile?.phoneNumber || "08011111111"
       });
 
       if (result.code !== '000') {
@@ -114,7 +115,7 @@ export default function ElectricityPurchase() {
       });
       
       // AI Notification
-      createAINotification(
+      await createAINotification(
         firestore,
         user.uid,
         `Successful payment of NGN ${payAmount.toLocaleString()} for ${selectedDisco.name} (${meterNumber})`,

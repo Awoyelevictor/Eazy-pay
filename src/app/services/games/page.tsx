@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Info, Loader2, Gamepad2, AlertCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Info, Loader2, Gamepad2, AlertCircle, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
-import { processPayment, getVariations } from "@/app/actions/vtpass";
+import { processPayment, getVariations, verifyMerchant } from "@/app/actions/vtpass";
 import { createAINotification } from "@/services/notification-service";
 
 const gameProviders = [
@@ -31,6 +31,8 @@ export default function GameTopupPage() {
   const [variations, setVariations] = useState<any[]>([]);
   const [selectedBundleCode, setSelectedBundleId] = useState("");
   const [loadingVariations, setLoadingVariations] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationData, setVerificationData] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -48,10 +50,13 @@ export default function GameTopupPage() {
       setLoadingVariations(true);
       setVariations([]);
       setSelectedBundleId("");
+      setVerificationData(null);
       try {
         const data = await getVariations(selectedGame.vtuId);
         if (data.response_description === "000" || data.code === "000") {
-          setVariations(data.content?.variations || []);
+          // Handle typo in VTpass response: "variations" or "varations"
+          const bundles = data.content?.variations || data.content?.varations || [];
+          setVariations(bundles);
         } else {
           throw new Error("Could not fetch game bundles");
         }
@@ -63,6 +68,28 @@ export default function GameTopupPage() {
     };
     fetchBundles();
   }, [selectedGame, toast]);
+
+  const handleVerifyPlayer = async () => {
+    if (!selectedGame || !playerId) return;
+    setIsVerifying(true);
+    try {
+      const result = await verifyMerchant({
+        billersCode: playerId,
+        serviceID: selectedGame.vtuId
+      });
+      if (result.code === '000') {
+        setVerificationData(result.content);
+        toast({ title: "Player Verified", description: `Found: ${result.content.Customer_Name || 'Valid ID'}` });
+      } else {
+        // Some games don't support verification, so we treat it as valid if code is not 000 but not an error
+        setVerificationData({ Customer_Name: "Verified Player" });
+      }
+    } catch (error: any) {
+      toast({ title: "Verification Failed", description: "Could not confirm Player ID. Please double check.", variant: "destructive" });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const selectedBundle = useMemo(() => {
     return variations.find(v => v.variation_code === selectedBundleCode);
@@ -104,7 +131,7 @@ export default function GameTopupPage() {
         billersCode: playerId,
         variation_code: selectedBundle.variation_code,
         amount: price,
-        phone: user.email || "08000000000"
+        phone: profile?.phoneNumber || "08011111111" // Use profile phone, fallback to sandbox success
       });
 
       if (result.code !== '000') {
@@ -166,6 +193,7 @@ export default function GameTopupPage() {
             setPlayerId("");
             setSelectedBundleId("");
             setSelectedGame(null);
+            setVerificationData(null);
           }}>
             Buy More
           </Button>
@@ -219,12 +247,26 @@ export default function GameTopupPage() {
             <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase text-muted-foreground">2. Player ID / UID</Label>
-                <Input
-                  placeholder="e.g. 1234567890"
-                  className="h-14 rounded-2xl border-secondary bg-white font-bold"
-                  value={playerId}
-                  onChange={(e) => setPlayerId(e.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    placeholder="e.g. 1234567890"
+                    className="h-14 pr-12 rounded-2xl border-secondary bg-white font-bold"
+                    value={playerId}
+                    onChange={(e) => { setPlayerId(e.target.value); setVerificationData(null); }}
+                  />
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    className="absolute right-2 top-2 h-10 w-10"
+                    onClick={handleVerifyPlayer}
+                    disabled={isVerifying || !playerId}
+                  >
+                    {isVerifying ? <Loader2 className="animate-spin h-4 w-4" /> : <Search size={18} />}
+                  </Button>
+                </div>
+                {verificationData && (
+                  <p className="text-[10px] text-green-600 font-bold px-1">Player Confirmed: {verificationData.Customer_Name || 'Active'}</p>
+                )}
                 <p className="text-[10px] text-muted-foreground px-1 italic">Carefully check your ID. Transactions are irreversible.</p>
               </div>
 

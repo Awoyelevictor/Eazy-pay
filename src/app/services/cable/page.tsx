@@ -15,6 +15,7 @@ import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestor
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { processPayment } from "@/app/actions/vtpass";
+import { createAINotification } from "@/services/notification-service";
 
 const providers = [
   { name: "DStv", vtuId: "dstv", bundles: [{ label: "Premium", variation: "dstv-premium", price: 29500 }, { label: "Compact", variation: "dstv-compact", price: 12500 }] },
@@ -51,7 +52,7 @@ export default function CablePurchase() {
     const day = now.getDate().toString().padStart(2, "0");
     const hour = now.getHours().toString().padStart(2, "0");
     const minute = now.getMinutes().toString().padStart(2, "0");
-    const randomPart = Math.random().toString(36).substring(2, 10);
+    const randomPart = Math.floor(1000000 + Math.random() * 9000000);
     return `${year}${month}${day}${hour}${minute}${randomPart}`;
   };
 
@@ -73,14 +74,13 @@ export default function CablePurchase() {
     try {
       const requestId = generateRequestId();
       
-      // USE SERVER ACTION INSTEAD OF DIRECT FETCH
       const result = await processPayment({
         request_id: requestId,
         serviceID: selectedProvider.vtuId,
         billersCode: smartCardNumber,
         variation_code: selectedBundle.variation,
         amount: selectedBundle.price,
-        phone: user.email || "08000000000"
+        phone: profile?.phoneNumber || "08011111111"
       });
 
       if (result.code !== '000') {
@@ -97,19 +97,20 @@ export default function CablePurchase() {
         createdAt: new Date().toISOString(),
       };
 
-      updateDoc(userRef, {
+      await updateDoc(userRef, {
         balance: increment(-selectedBundle.price)
-      }).catch(async () => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: userRef.path,
-          operation: 'update',
-          requestResourceData: { balance: increment(-selectedBundle.price) }
-        }));
       });
 
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
       
+      await createAINotification(
+        firestore,
+        user.uid,
+        `Successfully renewed ${selectedProvider.name} subscription for ${smartCardNumber}`,
+        user.displayName || ''
+      );
+
       setIsSuccess(true);
     } catch (error: any) {
       toast({
