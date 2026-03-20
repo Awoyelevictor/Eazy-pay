@@ -50,11 +50,17 @@ export default function GameTopupPage() {
       setSelectedSku("");
       try {
         const data = await getPay1stProducts();
-        const gameProducts = data.filter((p: any) => p.category === selectedGame.pay1stId || p.brand === selectedGame.pay1stId);
+        // Carry1st products sometimes use category or brand
+        const gameProducts = data.filter((p: any) => 
+          p.category === selectedGame.pay1stId || 
+          p.brand === selectedGame.pay1stId ||
+          p.name.toUpperCase().includes(selectedGame.pay1stId)
+        );
         
         if (gameProducts.length > 0) {
           setVariations(gameProducts);
         } else {
+          // Fallback static bundles if API returns empty for a specific ID
           setVariations([
             { sku: `${selectedGame.pay1stId}_80`, name: "80 Credits", price: 500 },
             { sku: `${selectedGame.pay1stId}_420`, name: "420 Credits", price: 2500 },
@@ -63,9 +69,9 @@ export default function GameTopupPage() {
         }
       } catch (error: any) {
         setVariations([
-          { sku: `${selectedGame.pay1stId}_80`, name: "80 Credits (Demo)", price: 500 },
-          { sku: `${selectedGame.pay1stId}_420`, name: "420 Credits (Demo)", price: 2500 },
-          { sku: `${selectedGame.pay1stId}_1000`, name: "1000 Credits (Demo)", price: 6000 },
+          { sku: `${selectedGame.pay1stId}_80`, name: "80 Credits (Simulation)", price: 500 },
+          { sku: `${selectedGame.pay1stId}_420`, name: "420 Credits (Simulation)", price: 2500 },
+          { sku: `${selectedGame.pay1stId}_1000`, name: "1000 Credits (Simulation)", price: 6000 },
         ]);
       } finally {
         setLoadingVariations(false);
@@ -129,6 +135,7 @@ export default function GameTopupPage() {
 
       setIsSuccess(true);
     } catch (error: any) {
+      // For prototype testing: Simulate success if API keys are missing
       if (error.message.includes("PAY1ST_API_KEY_HERE") || error.message.includes("401")) {
          await setDoc(userRef, { balance: increment(-price) }, { merge: true });
          await addDoc(collection(firestore, "users", user.uid, "transactions"), {

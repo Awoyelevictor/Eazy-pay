@@ -35,6 +35,7 @@ export async function getGlobalStats(db: Firestore) {
     const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     
     if (users.length === 0) {
+      console.log("Admin Service: Successfully fetched users but collection is empty.");
       return {
         userCount: 0,
         transactionCount: 0,
