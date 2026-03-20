@@ -2,9 +2,11 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Eye, EyeOff, Plus, ArrowUpRight, Loader2, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Plus, ArrowUpRight, Loader2, ShieldCheck, Landmark, ArrowLeftRight, CheckCircle2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useUser, useDoc, useFirestore } from "@/firebase";
 import { doc, setDoc, updateDoc, increment, collection, addDoc } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -12,6 +14,14 @@ import { FirestorePermissionError } from '@/firebase/errors';
 import { useToast } from "@/hooks/use-toast";
 import { PAYSTACK_PUBLIC_KEY } from "@/firebase/config";
 import { createAINotification } from "@/services/notification-service";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 declare global {
   interface Window {
@@ -24,7 +34,16 @@ export function WalletCard() {
   const firestore = useFirestore();
   const [showBalance, setShowBalance] = useState(true);
   const [isFunding, setIsFunding] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
   const { toast } = useToast();
+
+  const [withdrawData, setWithdrawData] = useState({
+    amount: "",
+    bankName: "",
+    accountNumber: "",
+    pin: ""
+  });
 
   const userRef = useMemo(() => {
     if (!firestore || !user) return null;
@@ -61,6 +80,15 @@ export function WalletCard() {
   const handleFundWallet = async () => {
     if (!user || !firestore || !userRef) return;
     
+    if (!window.PaystackPop) {
+      toast({
+        title: "System Loading",
+        description: "Payment gateway is still initializing. Please wait a moment.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const amountStr = prompt("Enter amount to fund in NGN (Min ₦100)", "1000");
     if (!amountStr) return;
     
@@ -76,16 +104,14 @@ export function WalletCard() {
       const handler = window.PaystackPop.setup({
         key: PAYSTACK_PUBLIC_KEY,
         email: user.email,
-        amount: Math.round(amount * 100), // Paystack works in kobo
+        amount: Math.round(amount * 100), 
         currency: "NGN",
         callback: async function (response: any) {
           try {
-            // 1. Update balance in Firestore
             await updateDoc(userRef, {
               balance: increment(amount)
             });
 
-            // 2. Add transaction record
             const transactionData = {
               type: "funding",
               amount: amount,
@@ -98,7 +124,6 @@ export function WalletCard() {
             const transactionsRef = collection(firestore, "users", user.uid, "transactions");
             await addDoc(transactionsRef, transactionData);
 
-            // 3. Create AI Notification
             await createAINotification(
               firestore, 
               user.uid, 
@@ -129,6 +154,71 @@ export function WalletCard() {
         description: "Could not connect to Paystack gateway.", 
         variant: "destructive" 
       });
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!user || !firestore || !userRef || !profile) return;
+    
+    const amount = parseFloat(withdrawData.amount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({ title: "Invalid Amount", variant: "destructive" });
+      return;
+    }
+
+    if (amount > profile.balance) {
+      toast({ title: "Insufficient Balance", description: "You cannot withdraw more than your current balance.", variant: "destructive" });
+      return;
+    }
+
+    if (withdrawData.pin !== profile.transactionPin) {
+      toast({ title: "Incorrect PIN", description: "Please enter your correct security PIN.", variant: "destructive" });
+      return;
+    }
+
+    setIsWithdrawing(true);
+
+    try {
+      // 1. Deduct from balance
+      await updateDoc(userRef, {
+        balance: increment(-amount)
+      });
+
+      // 2. Create withdrawal transaction
+      const transactionData = {
+        type: "withdrawal",
+        amount: amount,
+        service: "Wallet Withdrawal",
+        status: "pending", // Pending admin approval/processing
+        createdAt: new Date().toISOString(),
+        bankDetails: {
+          bankName: withdrawData.bankName,
+          accountNumber: withdrawData.accountNumber
+        }
+      };
+
+      const transactionsRef = collection(firestore, "users", user.uid, "transactions");
+      await addDoc(transactionsRef, transactionData);
+
+      // 3. AI Notification
+      await createAINotification(
+        firestore,
+        user.uid,
+        `Withdrawal request for NGN ${amount.toLocaleString()} to ${withdrawData.bankName} has been submitted.`,
+        user.displayName || ''
+      );
+
+      toast({
+        title: "Withdrawal Submitted",
+        description: `₦${amount.toLocaleString()} will be sent to your account shortly.`,
+      });
+
+      setWithdrawData({ amount: "", bankName: "", accountNumber: "", pin: "" });
+      setShowWithdrawDialog(false);
+    } catch (error: any) {
+      toast({ title: "Withdrawal Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsWithdrawing(false);
     }
   };
 
@@ -166,9 +256,72 @@ export function WalletCard() {
           >
             {isFunding ? <Loader2 className="animate-spin" /> : <Plus className="mr-2 h-6 w-6" />} Fund Wallet
           </Button>
-          <Button variant="outline" className="flex-1 h-14 rounded-2xl bg-white/10 hover:bg-white/20 border-white/20 text-white shadow-md font-black text-lg transition-all active:scale-95">
-            <ArrowUpRight className="mr-2 h-6 w-6" /> Transfer
-          </Button>
+
+          <Dialog open={showWithdrawDialog} onOpenChange={setShowWithdrawDialog}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex-1 h-14 rounded-2xl bg-white/10 hover:bg-white/20 border-white/20 text-white shadow-md font-black text-lg transition-all active:scale-95">
+                <ArrowUpRight className="mr-2 h-6 w-6" /> Withdraw
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="rounded-[2.5rem] sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-black flex items-center gap-2">
+                   <Landmark className="text-primary" /> Transfer Funds
+                </DialogTitle>
+                <DialogDescription className="font-medium">Withdraw balance to your local bank account.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Bank Name</Label>
+                  <Input 
+                    placeholder="e.g. Access Bank"
+                    className="h-12 rounded-xl"
+                    value={withdrawData.bankName}
+                    onChange={(e) => setWithdrawData({...withdrawData, bankName: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Account Number</Label>
+                  <Input 
+                    placeholder="10 Digits"
+                    maxLength={10}
+                    className="h-12 rounded-xl"
+                    value={withdrawData.accountNumber}
+                    onChange={(e) => setWithdrawData({...withdrawData, accountNumber: e.target.value.replace(/\D/g, '')})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Amount to Withdraw (₦)</Label>
+                  <Input 
+                    type="number"
+                    placeholder="0.00"
+                    className="h-12 rounded-xl font-bold"
+                    value={withdrawData.amount}
+                    onChange={(e) => setWithdrawData({...withdrawData, amount: e.target.value})}
+                  />
+                  <p className="text-[10px] text-muted-foreground font-bold px-1">Available: ₦{balanceFormatted}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Transaction PIN</Label>
+                  <Input 
+                    type="password"
+                    placeholder="••••"
+                    maxLength={6}
+                    className="h-12 rounded-xl tracking-widest text-center font-bold"
+                    value={withdrawData.pin}
+                    onChange={(e) => setWithdrawData({...withdrawData, pin: e.target.value.replace(/\D/g, '')})}
+                  />
+                </div>
+                <Button 
+                  className="w-full h-14 rounded-2xl font-black text-lg mt-4 shadow-xl shadow-primary/20" 
+                  onClick={handleWithdraw}
+                  disabled={isWithdrawing || !withdrawData.amount || !withdrawData.accountNumber}
+                >
+                  {isWithdrawing ? <Loader2 className="animate-spin" /> : <><ArrowLeftRight className="mr-2" /> Confirm Transfer</>}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </CardContent>
     </Card>

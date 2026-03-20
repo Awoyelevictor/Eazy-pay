@@ -45,6 +45,7 @@
             "airtime",
             "data",
             "funding",
+            "withdrawal",
             "electricity",
             "cable",
             "games",
@@ -78,6 +79,13 @@
         },
         "aiGenerated": {
           "type": "boolean"
+        },
+        "bankDetails": {
+          "type": "object",
+          "properties": {
+            "bankName": { "type": "string" },
+            "accountNumber": { "type": "string" }
+          }
         }
       },
       "required": [
