@@ -1,9 +1,8 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Info, Loader2, Gamepad2, AlertCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Info, Loader2, Gamepad2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,14 +10,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
-import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
+import { doc, collection, addDoc, setDoc, increment } from "firebase/firestore";
 import { processPay1stGameTopup, getPay1stProducts } from "@/app/actions/pay1st";
 import { createAINotification } from "@/services/notification-service";
 
 const gameProviders = [
+  { name: "Bloodstrike Credits", pay1stId: "BLOODSTRIKE", icon: Gamepad2 },
   { name: "Call of Duty Mobile", pay1stId: "CODM", icon: Gamepad2 },
   { name: "Free Fire Diamonds", pay1stId: "FREEFIRE", icon: Gamepad2 },
-  { name: "Bloodstrike Credits", pay1stId: "BLOODSTRIKE", icon: Gamepad2 },
   { name: "Mobile Legends", pay1stId: "MOBILE_LEGENDS", icon: Gamepad2 },
   { name: "PUBG Mobile UC", pay1stId: "PUBG", icon: Gamepad2 },
 ];
@@ -56,7 +55,6 @@ export default function GameTopupPage() {
         if (gameProducts.length > 0) {
           setVariations(gameProducts);
         } else {
-          // Robust demo fallback
           setVariations([
             { sku: `${selectedGame.pay1stId}_80`, name: "80 Credits", price: 500 },
             { sku: `${selectedGame.pay1stId}_420`, name: "420 Credits", price: 2500 },
@@ -89,7 +87,7 @@ export default function GameTopupPage() {
     }
 
     const price = parseFloat(selectedBundle.price);
-    if (profile && profile.balance < price) {
+    if (profile && (profile.balance || 0) < price) {
       toast({ title: "Insufficient Balance", variant: "destructive" });
       return;
     }
@@ -109,7 +107,7 @@ export default function GameTopupPage() {
         throw new Error(result.message || "Top-up Failed");
       }
 
-      await updateDoc(userRef, { balance: increment(-price) });
+      await setDoc(userRef, { balance: increment(-price) }, { merge: true });
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, {
         type: "games",
@@ -131,9 +129,8 @@ export default function GameTopupPage() {
 
       setIsSuccess(true);
     } catch (error: any) {
-      // Simulation for demo/missing keys
       if (error.message.includes("PAY1ST_API_KEY_HERE") || error.message.includes("401")) {
-         await updateDoc(userRef, { balance: increment(-price) });
+         await setDoc(userRef, { balance: increment(-price) }, { merge: true });
          await addDoc(collection(firestore, "users", user.uid, "transactions"), {
             type: "games",
             amount: price,
@@ -184,7 +181,7 @@ export default function GameTopupPage() {
             <ArrowLeft size={24} />
           </Button>
         </Link>
-        <h1 className="text-xl font-black">Pay1st Pro Gaming</h1>
+        <h1 className="text-xl font-black">Pro Gaming</h1>
       </header>
 
       <main className="px-6 py-8 space-y-6 max-w-xl mx-auto">
@@ -255,7 +252,7 @@ export default function GameTopupPage() {
             <CardContent className="p-6 flex gap-4 text-primary">
               <Info size={24} className="flex-shrink-0" />
               <div className="text-sm font-medium">
-                <p>Wallet Balance: <span className="font-black">₦{profile?.balance?.toLocaleString() || "0.00"}</span></p>
+                <p>Wallet Balance: <span className="font-black">₦{(profile?.balance || 0).toLocaleString()}</span></p>
                 <p className="mt-1 opacity-70">Price: ₦{parseFloat(selectedBundle.price).toLocaleString()}</p>
               </div>
             </CardContent>

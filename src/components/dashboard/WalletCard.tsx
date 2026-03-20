@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo } from "react";
@@ -8,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUser, useDoc, useFirestore } from "@/firebase";
-import { doc, updateDoc, increment, collection, addDoc } from "firebase/firestore";
+import { doc, setDoc, increment, collection, addDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { PAYSTACK_PUBLIC_KEY } from "@/firebase/config";
 import { createAINotification } from "@/services/notification-service";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -50,17 +50,14 @@ export function WalletCard() {
 
   const { data: profile, loading } = useDoc(userRef);
 
-  /**
-   * Internal function to handle successful funding processing.
-   */
   const processFundingSuccess = async (reference: string, amount: number) => {
     if (!user || !firestore || !userRef) return;
 
     try {
-      // 1. Update Firestore Balance
-      await updateDoc(userRef, {
+      // Use setDoc with merge and increment for guaranteed persistence
+      await setDoc(userRef, {
         balance: increment(amount)
-      });
+      }, { merge: true });
 
       const transactionData = {
         type: "funding",
@@ -71,11 +68,9 @@ export function WalletCard() {
         reference: reference
       };
 
-      // 2. Log transaction
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
 
-      // 3. Notify user
       await createAINotification(
         firestore, 
         user.uid, 
@@ -89,58 +84,57 @@ export function WalletCard() {
       });
     } catch (e: any) {
       console.error("Funding Success Processing Error:", e);
-      toast({ title: "Update Failed", description: "Payment was successful but balance update failed. Please contact support.", variant: "destructive" });
+      toast({ title: "Update Failed", description: "Payment was successful but balance update failed. Check internet connection.", variant: "destructive" });
     } finally {
       setIsFunding(false);
     }
   };
 
-  const handleFundWallet = async () => {
+  const handleFundWallet = () => {
     if (!user || !firestore || !userRef || !user.email) return;
     
     if (!window.PaystackPop) {
       toast({
-        title: "Connection Error",
-        description: "Paystack script is not loaded yet. Please refresh the page.",
+        title: "Gateway Offline",
+        description: "Payment system is initializing. Please wait 5 seconds and retry.",
         variant: "destructive"
       });
       return;
     }
 
-    const amountStr = prompt("Enter amount to fund in NGN (Min ₦100)", "1000");
+    const amountStr = prompt("Enter amount to fund (₦)", "1000");
     if (!amountStr) return;
     
     const amount = parseFloat(amountStr);
     if (isNaN(amount) || amount < 100) {
-      toast({ title: "Minimum funding is ₦100", variant: "destructive" });
+      toast({ title: "Min ₦100 required", variant: "destructive" });
       return;
     }
 
     setIsFunding(true);
 
     try {
-      const reference = `EP-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
-      
-      const handler = window.PaystackPop.setup({
+      const paystack = new window.PaystackPop();
+      paystack.newTransaction({
         key: PAYSTACK_PUBLIC_KEY,
         email: user.email,
         amount: Math.round(amount * 100),
-        currency: "NGN",
-        ref: reference,
-        callback: function(response: any) {
-          processFundingSuccess(response.reference || reference, amount);
+        onSuccess: (transaction: any) => {
+          processFundingSuccess(transaction.reference, amount);
         },
-        onClose: function() {
+        onCancel: () => {
           setIsFunding(false);
+        },
+        onError: (error: any) => {
+          setIsFunding(false);
+          toast({ title: "Payment Error", description: "Could not initiate transaction.", variant: "destructive" });
         }
       });
-
-      handler.openIframe();
     } catch (error) {
       setIsFunding(false);
       toast({ 
         title: "Gateway Error", 
-        description: "Could not launch Paystack.", 
+        description: "Paystack initialization failed.", 
         variant: "destructive" 
       });
     }
@@ -155,22 +149,22 @@ export function WalletCard() {
       return;
     }
 
-    if (amount > profile.balance) {
+    if (amount > (profile.balance || 0)) {
       toast({ title: "Insufficient Balance", variant: "destructive" });
       return;
     }
 
     if (!profile.transactionPin || withdrawData.pin !== profile.transactionPin) {
-      toast({ title: "Incorrect PIN", description: "Enter your 6-digit Security PIN.", variant: "destructive" });
+      toast({ title: "Incorrect Security PIN", variant: "destructive" });
       return;
     }
 
     setIsWithdrawing(true);
 
     try {
-      await updateDoc(userRef, {
+      await setDoc(userRef, {
         balance: increment(-amount)
-      });
+      }, { merge: true });
 
       const transactionData = {
         type: "withdrawal",
@@ -190,13 +184,13 @@ export function WalletCard() {
       await createAINotification(
         firestore,
         user.uid,
-        `Withdrawal of NGN ${amount.toLocaleString()} to ${withdrawData.bankName} is pending.`,
+        `Withdrawal of NGN ${amount.toLocaleString()} is processing.`,
         user.displayName || ''
       );
 
       toast({
-        title: "Withdrawal Requested",
-        description: `₦${amount.toLocaleString()} is being processed.`,
+        title: "Transfer Initiated",
+        description: "Funds will be settled to your bank shortly.",
       });
 
       setWithdrawData({ amount: "", bankName: "", accountNumber: "", pin: "" });
@@ -230,9 +224,13 @@ export function WalletCard() {
         </div>
         <div className="flex items-baseline gap-2 mb-10">
           <span className="text-2xl font-bold opacity-60">₦</span>
-          <h2 className="text-5xl font-black tracking-tight">
-            {loading ? <Loader2 className="animate-spin h-8 w-8" /> : (showBalance ? balanceFormatted : "****.**")}
-          </h2>
+          {loading ? (
+            <Skeleton className="h-12 w-48 bg-white/20 rounded-xl" />
+          ) : (
+            <h2 className="text-5xl font-black tracking-tight">
+              {showBalance ? balanceFormatted : "****.**"}
+            </h2>
+          )}
         </div>
         <div className="flex gap-4">
           <Button 
