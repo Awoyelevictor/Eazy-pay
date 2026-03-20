@@ -8,7 +8,9 @@ import {
   query, 
   where,
   getDoc,
-  doc
+  doc,
+  updateDoc,
+  addDoc
 } from 'firebase/firestore';
 import { createAINotification } from './notification-service';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -16,13 +18,9 @@ import { FirestorePermissionError } from '@/firebase/errors';
 
 /**
  * Fetch aggregated statistics for the admin dashboard.
- * Optimized to handle large datasets and security rule restrictions.
  */
 export async function getGlobalStats(db: Firestore) {
   try {
-    // 1. Fetch all users
-    // If this fails with a permission error, it's usually because the admin user
-    // hasn't been granted 'list' access on the /users collection in Security Rules.
     const usersSnap = await getDocs(collection(db, 'users')).catch(async (err) => {
       const permissionError = new FirestorePermissionError({
         path: 'users',
@@ -49,17 +47,14 @@ export async function getGlobalStats(db: Firestore) {
     let totalBalance = 0;
     const allTransactions: any[] = [];
     
-    // 2. Fetch all transactions for all users in parallel
     const transactionPromises = users.map(async (user: any) => {
       totalBalance += Number(user.balance) || 0;
       
       try {
         const txSnap = await getDocs(collection(db, 'users', user.id, 'transactions'));
-        const userTxs = txSnap.docs.map(d => ({ id: d.id, userId: user.id, ...d.data() }));
+        const userTxs = txSnap.docs.map(d => ({ id: d.id, userId: user.id, userEmail: user.email, ...d.data() }));
         allTransactions.push(...userTxs);
       } catch (e) {
-        // If we can't see a specific user's transactions, we skip it for the aggregate
-        // but log the error contextually if needed.
         console.warn(`Admin: Could not fetch transactions for user ${user.id}`);
       }
     });
@@ -78,13 +73,44 @@ export async function getGlobalStats(db: Firestore) {
       totalVolume,
       activeBalance: totalBalance,
       successRate,
-      transactions: allTransactions,
-      users
+      transactions: allTransactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+      users: users.sort((a, b) => (b.balance || 0) - (a.balance || 0))
     };
   } catch (error: any) {
     console.error("Global Stats Fetch Error:", error);
     throw error;
   }
+}
+
+/**
+ * Manually update a user's balance from the admin panel.
+ */
+export async function adminUpdateUserBalance(
+  db: Firestore, 
+  userId: string, 
+  newBalance: number,
+  adminReason: string
+) {
+  const userRef = doc(db, 'users', userId);
+  
+  await updateDoc(userRef, { balance: newBalance });
+  
+  // Log the manual adjustment
+  await addDoc(collection(db, 'users', userId, 'transactions'), {
+    type: 'funding',
+    amount: newBalance,
+    service: 'Admin Manual Credit',
+    status: 'success',
+    createdAt: new Date().toISOString(),
+    adminNote: adminReason
+  });
+
+  await createAINotification(
+    db,
+    userId,
+    `Admin has manually updated your balance to ₦${newBalance.toLocaleString()}. Reason: ${adminReason}`,
+    'System'
+  );
 }
 
 /**

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -12,11 +13,13 @@ import {
   TrendingUp, 
   Loader2,
   RefreshCcw,
-  LayoutDashboard,
   BellRing,
   AlertCircle,
   PieChart as PieIcon,
-  AreaChart as AreaIcon
+  CreditCard,
+  UserCheck,
+  ArrowUpDown,
+  Wallet
 } from 'lucide-react';
 import { 
   Card, 
@@ -28,7 +31,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useFirestore, useUser } from '@/firebase';
-import { getGlobalStats, broadcastGlobalNotification } from '@/services/admin-service';
+import { getGlobalStats, broadcastGlobalNotification, adminUpdateUserBalance } from '@/services/admin-service';
 import { adminAssistant } from '@/ai/flows/admin-assistant-flow';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -40,10 +43,9 @@ import {
   Tooltip, 
   Cell,
   PieChart,
-  Pie,
-  AreaChart,
-  Area
+  Pie
 } from 'recharts';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function AdminDashboard() {
   const { user } = useUser();
@@ -56,6 +58,12 @@ export default function AdminDashboard() {
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [broadcasting, setBroadcasting] = useState(false);
   
+  // Search & Balance Editor
+  const [userSearch, setUserSearch] = useState('');
+  const [editingBalance, setEditingBalance] = useState<{id: string, email: string, current: number} | null>(null);
+  const [newBalanceValue, setNewBalanceValue] = useState('');
+  const [adjusting, setAdjusting] = useState(false);
+
   // AI Assistant State
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<any[]>([]);
@@ -70,7 +78,7 @@ export default function AdminDashboard() {
       setStats(data);
     } catch (e: any) {
       console.error(e);
-      setError("Failed to fetch app statistics. Check Security Rules permissions.");
+      setError("Failed to sync users. Ensure you have Admin permissions in Security Rules.");
     } finally {
       setLoading(false);
     }
@@ -80,12 +88,32 @@ export default function AdminDashboard() {
     fetchStats();
   }, [db]);
 
+  const handleManualAdjustment = async () => {
+    if (!db || !editingBalance || !newBalanceValue) return;
+    setAdjusting(true);
+    try {
+      await adminUpdateUserBalance(
+        db, 
+        editingBalance.id, 
+        parseFloat(newBalanceValue), 
+        "Manual Admin Correction"
+      );
+      toast({ title: "Balance Updated", description: `${editingBalance.email} is now at ₦${newBalanceValue}` });
+      setEditingBalance(null);
+      fetchStats();
+    } catch (e) {
+      toast({ title: "Update Failed", variant: "destructive" });
+    } finally {
+      setAdjusting(false);
+    }
+  };
+
   const handleBroadcast = async () => {
     if (!db || !broadcastMsg || !user) return;
     setBroadcasting(true);
     try {
       await broadcastGlobalNotification(db, broadcastMsg, user.displayName || 'Owner');
-      toast({ title: "Broadcast Sent", description: "All users have been notified." });
+      toast({ title: "Broadcast Sent", description: "All users notified." });
       setBroadcastMsg('');
     } catch (e) {
       toast({ title: "Broadcast Failed", variant: "destructive" });
@@ -94,81 +122,25 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim() || !stats) return;
-
-    const userMsg = { role: 'user', text: chatInput };
-    setChatMessages(prev => [...prev, userMsg]);
-    const currentInput = chatInput;
-    setChatInput('');
-    setAiLoading(true);
-
-    try {
-      const result = await adminAssistant({
-        message: currentInput,
-        appContext: {
-          userCount: stats.userCount,
-          transactionCount: stats.transactionCount,
-          totalVolume: stats.totalVolume,
-          activeBalance: stats.activeBalance,
-          successRate: stats.successRate,
-        }
-      });
-      setChatMessages(prev => [...prev, { role: 'model', text: result.response }]);
-    } catch (e) {
-      toast({ title: "Assistant Error", description: "Check AI service availability.", variant: "destructive" });
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const barChartData = useMemo(() => {
-    if (!stats || !stats.transactions) return [];
-    const groups: Record<string, number> = {};
-    stats.transactions.forEach((t: any) => {
-      const type = t.type || 'other';
-      groups[type] = (groups[type] || 0) + 1;
-    });
-    return Object.entries(groups).map(([name, value]) => ({ name: name.toUpperCase(), value }));
-  }, [stats]);
-
-  const pieChartData = useMemo(() => {
-    if (!stats || !stats.transactions) return [];
-    const statusMap: Record<string, number> = {};
-    stats.transactions.forEach((t: any) => {
-      const status = t.status || 'unknown';
-      statusMap[status] = (statusMap[status] || 0) + 1;
-    });
-    return Object.entries(statusMap).map(([name, value]) => ({ name: name.toUpperCase(), value }));
-  }, [stats]);
+  const filteredUsers = useMemo(() => {
+    if (!stats?.users) return [];
+    return stats.users.filter((u: any) => 
+      u.email?.toLowerCase().includes(userSearch.toLowerCase()) || 
+      u.displayName?.toLowerCase().includes(userSearch.toLowerCase())
+    );
+  }, [stats, userSearch]);
 
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
   if (loading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-50">
       <Loader2 className="animate-spin text-primary h-12 w-12" />
-      <p className="font-black text-xs uppercase tracking-[0.3em] opacity-50">Syncing Admin OS...</p>
-    </div>
-  );
-
-  if (error) return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8 gap-6 text-center">
-      <div className="h-20 w-20 bg-destructive/10 rounded-full flex items-center justify-center text-destructive">
-        <AlertCircle size={40} />
-      </div>
-      <div>
-        <h2 className="text-2xl font-black mb-2">Access Error</h2>
-        <p className="text-muted-foreground max-w-sm">{error}</p>
-      </div>
-      <Button onClick={fetchStats} className="rounded-2xl h-12 px-8">
-        <RefreshCcw className="mr-2 h-4 w-4" /> Retry Sync
-      </Button>
+      <p className="font-black text-[10px] uppercase tracking-widest opacity-40">Syncing Master Node...</p>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 sm:p-10">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-10">
       <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-10 gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -177,162 +149,202 @@ export default function AdminDashboard() {
           </div>
           <h1 className="text-4xl font-black text-slate-900">App Ecosystem</h1>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="rounded-xl" onClick={fetchStats}>
-            <RefreshCcw className="mr-2 h-4 w-4" /> Refresh Data
-          </Button>
-        </div>
+        <Button variant="outline" className="rounded-xl bg-white shadow-sm" onClick={fetchStats}>
+          <RefreshCcw className="mr-2 h-4 w-4" /> Sync Live Data
+        </Button>
       </header>
 
-      {/* Main Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {[
           { label: 'Total Users', value: stats?.userCount || 0, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
           { label: 'Transactions', value: stats?.transactionCount || 0, icon: Activity, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Total Volume', value: `₦${(stats?.totalVolume || 0).toLocaleString()}`, icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50' },
-          { label: 'Success Rate', value: stats?.successRate || '100%', icon: BarChart3, color: 'text-purple-600', bg: 'bg-purple-50' },
+          { label: 'Active Balances', value: `₦${(stats?.activeBalance || 0).toLocaleString()}`, icon: Wallet, color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: 'Success Rate', value: stats?.successRate || '100%', icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-50' },
         ].map((item) => (
-          <Card key={item.label} className="border-none shadow-sm rounded-3xl">
-            <CardContent className="p-6 flex items-center gap-4">
+          <Card key={item.label} className="border-none shadow-sm rounded-3xl overflow-hidden">
+            <CardContent className="p-5 flex items-center gap-4">
               <div className={`h-12 w-12 rounded-2xl ${item.bg} ${item.color} flex items-center justify-center`}>
-                <item.icon size={24} />
+                <item.icon size={22} />
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">{item.label}</p>
-                <p className="text-2xl font-black text-slate-900">{item.value}</p>
+                <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider">{item.label}</p>
+                <p className="text-xl font-black text-slate-900">{item.value}</p>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
-        {/* Service Bar Chart */}
-        <Card className="lg:col-span-2 border-none shadow-sm rounded-[2.5rem]">
-          <CardHeader>
-            <CardTitle className="text-xl font-black flex items-center gap-2"><BarChart3 size={20} /> Service Volume</CardTitle>
-          </CardHeader>
-          <CardContent className="h-[300px]">
-            {barChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={barChartData}>
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
-                  <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                  <Bar dataKey="value" radius={[10, 10, 0, 0]}>
-                    {barChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-muted-foreground text-sm italic">
-                No transaction data to display.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="management" className="space-y-8">
+        <TabsList className="bg-white p-1 rounded-2xl shadow-sm border h-14">
+          <TabsTrigger value="management" className="rounded-xl h-12 px-6 font-bold data-[state=active]:bg-primary data-[state=active]:text-white">User Management</TabsTrigger>
+          <TabsTrigger value="analytics" className="rounded-xl h-12 px-6 font-bold data-[state=active]:bg-primary data-[state=active]:text-white">Analytics</TabsTrigger>
+          <TabsTrigger value="communications" className="rounded-xl h-12 px-6 font-bold data-[state=active]:bg-primary data-[state=active]:text-white">Announcements</TabsTrigger>
+        </TabsList>
 
-        {/* Transaction Success Pie */}
-        <Card className="border-none shadow-sm rounded-[2.5rem]">
-          <CardHeader>
-            <CardTitle className="text-xl font-black flex items-center gap-2"><PieIcon size={20} /> Success Ratio</CardTitle>
-          </CardHeader>
-          <CardContent className="h-[300px]">
-            {pieChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieChartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {pieChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.name === 'SUCCESS' ? '#10b981' : '#ef4444'} />
+        <TabsContent value="management" className="space-y-6">
+          <Card className="border-none shadow-sm rounded-[2.5rem] overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-xl font-black">User Directory</CardTitle>
+                <CardDescription>Search, view balances, and manually credit wallets.</CardDescription>
+              </div>
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                <Input 
+                  placeholder="Search by email..." 
+                  className="pl-10 h-10 rounded-xl bg-slate-50 border-none"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="text-[10px] font-black uppercase tracking-widest text-slate-400 border-b">
+                    <tr>
+                      <th className="pb-4">User Details</th>
+                      <th className="pb-4">Balance</th>
+                      <th className="pb-4">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {filteredUsers.map((u: any) => (
+                      <tr key={u.id} className="group hover:bg-slate-50 transition-colors">
+                        <td className="py-4">
+                          <p className="font-bold text-sm">{u.displayName || 'Unknown User'}</p>
+                          <p className="text-xs text-slate-400">{u.email}</p>
+                        </td>
+                        <td className="py-4 font-black text-primary">₦{(u.balance || 0).toLocaleString()}</td>
+                        <td className="py-4">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="rounded-lg h-8 text-[10px] font-black uppercase tracking-widest gap-2"
+                            onClick={() => {
+                              setEditingBalance({ id: u.id, email: u.email, current: u.balance || 0 });
+                              setNewBalanceValue((u.balance || 0).toString());
+                            }}
+                          >
+                            <ArrowUpDown size={14} /> Adjust Balance
+                          </Button>
+                        </td>
+                      </tr>
                     ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-muted-foreground text-sm italic">
-                Awaiting first events...
+                    {filteredUsers.length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="py-12 text-center text-slate-400 italic">No users found matching "{userSearch}"</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* AI Admin Chat */}
-        <Card className="border-none shadow-sm rounded-[2.5rem] flex flex-col h-[500px]">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-xl font-black flex items-center gap-2">
-              <MessageSquare className="text-primary" /> Fyre P.A.
-            </CardTitle>
-            <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
-          </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto space-y-4 px-6">
-            {chatMessages.length === 0 && (
-              <div className="text-center py-10 opacity-30">
-                <MessageSquare className="mx-auto mb-2" size={48} />
-                <p className="text-sm font-bold">Ask me about your app's performance</p>
-              </div>
-            )}
-            {chatMessages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] p-4 rounded-2xl text-sm ${
-                  msg.role === 'user' ? 'bg-primary text-white rounded-br-none' : 'bg-slate-100 text-slate-800 rounded-bl-none'
-                }`}>
-                  {msg.text}
-                </div>
-              </div>
-            ))}
-            {aiLoading && <Loader2 className="animate-spin h-6 w-6 text-primary mx-auto" />}
-          </CardContent>
-          <div className="p-6 pt-0 border-t mt-auto bg-white rounded-b-[2.5rem]">
-            <form onSubmit={handleChat} className="relative">
-              <Input 
-                placeholder="Ask me anything about the app..."
-                className="h-14 pr-14 bg-slate-50 border-none rounded-xl"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-              />
-              <Button type="submit" size="icon" className="absolute right-2 top-2 h-10 w-10" disabled={aiLoading || !stats}>
-                <Send size={18} />
-              </Button>
-            </form>
+          {editingBalance && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+              <Card className="w-full max-w-md rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-200">
+                <CardHeader>
+                  <CardTitle className="text-2xl font-black">Manual Credit</CardTitle>
+                  <CardDescription>Adjusting balance for <span className="font-bold text-primary">{editingBalance.email}</span></CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black uppercase text-slate-400">Set New Balance (₦)</p>
+                    <Input 
+                      type="number"
+                      className="h-16 rounded-2xl text-2xl font-black bg-slate-50 border-none"
+                      value={newBalanceValue}
+                      onChange={(e) => setNewBalanceValue(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Button variant="outline" className="h-14 rounded-2xl font-bold" onClick={() => setEditingBalance(null)}>Cancel</Button>
+                    <Button className="h-14 rounded-2xl font-black" onClick={handleManualAdjustment} disabled={adjusting}>
+                      {adjusting ? <Loader2 className="animate-spin" /> : "Save Changes"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="border-none shadow-sm rounded-[2.5rem]">
+              <CardHeader><CardTitle className="text-lg font-black">Service Distribution</CardTitle></CardHeader>
+              <CardContent className="h-[300px]">
+                {stats?.transactions?.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={Object.entries(stats.transactions.reduce((acc: any, t: any) => {
+                      acc[t.type] = (acc[t.type] || 0) + 1;
+                      return acc;
+                    }, {})).map(([name, value]) => ({ name: name.toUpperCase(), value }))}>
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700 }} />
+                      <Tooltip />
+                      <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                        {COLORS.map((c, i) => <Cell key={i} fill={c} />)}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : <div className="h-full flex items-center justify-center text-slate-400 italic">No activity yet.</div>}
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm rounded-[2.5rem]">
+              <CardHeader><CardTitle className="text-lg font-black">Success Ratio</CardTitle></CardHeader>
+              <CardContent className="h-[300px]">
+                {stats?.transactions?.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie 
+                        data={Object.entries(stats.transactions.reduce((acc: any, t: any) => {
+                          acc[t.status] = (acc[t.status] || 0) + 1;
+                          return acc;
+                        }, {})).map(([name, value]) => ({ name: name.toUpperCase(), value }))}
+                        innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value"
+                      >
+                         <Cell fill="#10b981" />
+                         <Cell fill="#ef4444" />
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : <div className="h-full flex items-center justify-center text-slate-400 italic">No records.</div>}
+              </CardContent>
+            </Card>
           </div>
-        </Card>
+        </TabsContent>
 
-        {/* Global Broadcast */}
-        <Card className="border-none shadow-sm rounded-[2.5rem] bg-slate-900 text-white">
-          <CardHeader>
-            <CardTitle className="text-xl font-black flex items-center gap-2"><BellRing size={20} /> Global Broadcast</CardTitle>
-            <CardDescription className="text-slate-400">Notify every user instantly using AI composition.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <textarea 
-              className="w-full bg-slate-800 border-none rounded-2xl p-4 text-sm h-48 focus:ring-2 ring-primary resize-none placeholder:text-slate-600 text-white"
-              placeholder="e.g. System maintenance at 2AM..."
-              value={broadcastMsg}
-              onChange={(e) => setBroadcastMsg(e.target.value)}
-            />
-            <Button 
-              className="w-full h-16 rounded-2xl font-black text-xl bg-primary hover:bg-primary/90" 
-              onClick={handleBroadcast}
-              disabled={broadcasting || !broadcastMsg}
-            >
-              {broadcasting ? <Loader2 className="animate-spin" /> : "Blast Announcement"}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+        <TabsContent value="communications" className="space-y-6">
+           <Card className="border-none shadow-sm rounded-[2.5rem] bg-slate-900 text-white overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-8 opacity-5"><BellRing size={200} /></div>
+              <CardHeader>
+                <CardTitle className="text-2xl font-black">Global Announcement</CardTitle>
+                <CardDescription className="text-slate-400">Broadcast a message to all registered users instantly.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6 relative z-10">
+                <textarea 
+                  className="w-full bg-slate-800 border-none rounded-2xl p-6 text-lg h-48 focus:ring-2 ring-primary resize-none placeholder:text-slate-600"
+                  placeholder="e.g. System maintenance scheduled for 12AM..."
+                  value={broadcastMsg}
+                  onChange={(e) => setBroadcastMsg(e.target.value)}
+                />
+                <Button 
+                  className="w-full h-16 rounded-2xl font-black text-xl bg-primary hover:bg-primary/90" 
+                  onClick={handleBroadcast}
+                  disabled={broadcasting || !broadcastMsg}
+                >
+                  {broadcasting ? <Loader2 className="animate-spin" /> : "Blast Announcement"}
+                </Button>
+              </CardContent>
+           </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
