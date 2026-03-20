@@ -10,7 +10,9 @@ import {
   doc,
   updateDoc,
   addDoc,
-  limit
+  limit,
+  setDoc,
+  increment
 } from 'firebase/firestore';
 import { createAINotification } from './notification-service';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -40,7 +42,7 @@ export async function getGlobalStats(db: Firestore) {
         const txSnap = await getDocs(collection(db, 'users', userDoc.id, 'transactions'));
         allTransactions.push(...txSnap.docs.map(d => ({ id: d.id, userId: userDoc.id, ...d.data() })));
       } catch (e) {
-        // Silent catch for individual user tx if restricted
+        // Silent catch for individual user transactions if restricted
       }
     });
 
@@ -71,7 +73,8 @@ export async function getGlobalStats(db: Firestore) {
  * Specific function to find a user by email if the global list fails (bypasses list permission).
  */
 export async function findUserByEmail(db: Firestore, email: string) {
-  const q = query(collection(db, 'users'), where('email', '==', email), limit(1));
+  if (!email) return null;
+  const q = query(collection(db, 'users'), where('email', '==', email.trim()), limit(1));
   const snap = await getDocs(q);
   if (snap.empty) return null;
   return { id: snap.docs[0].id, ...snap.docs[0].data() };
@@ -87,22 +90,26 @@ export async function adminUpdateUserBalance(
   adminReason: string
 ) {
   const userRef = doc(db, 'users', userId);
-  await updateDoc(userRef, { balance: newBalance });
   
+  // Update doc with persistence
+  await setDoc(userRef, { balance: Number(newBalance) }, { merge: true });
+  
+  // Log the correction
   await addDoc(collection(db, 'users', userId, 'transactions'), {
     type: 'funding',
-    amount: newBalance,
-    service: 'Admin Manual Credit',
+    amount: Number(newBalance),
+    service: 'System Correction',
     status: 'success',
     createdAt: new Date().toISOString(),
-    adminNote: adminReason
+    adminNote: adminReason,
+    aiGenerated: false
   });
 
   await createAINotification(
     db,
     userId,
-    `Admin has manually updated your balance to ₦${newBalance.toLocaleString()}. Reason: ${adminReason}`,
-    'System'
+    `System balance adjustment: ₦${newBalance.toLocaleString()}. Reason: ${adminReason}`,
+    'Admin'
   );
 }
 
