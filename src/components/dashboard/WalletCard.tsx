@@ -1,8 +1,7 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Eye, EyeOff, Plus, ArrowUpRight, Loader2, ShieldCheck, Landmark, ArrowLeftRight, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, Plus, ArrowUpRight, Loader2, ShieldCheck, Landmark, ArrowLeftRight, CheckCircle2, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,8 +81,8 @@ export function WalletCard() {
     
     if (!window.PaystackPop) {
       toast({
-        title: "System Loading",
-        description: "Payment gateway is still initializing. Please wait a moment.",
+        title: "Connection Error",
+        description: "Paystack gateway is not reachable. Check your internet connection.",
         variant: "destructive"
       });
       return;
@@ -101,12 +100,14 @@ export function WalletCard() {
     setIsFunding(true);
 
     try {
-      const handler = window.PaystackPop.setup({
+      // Modern PaystackPop constructor usage
+      const paystack = new window.PaystackPop();
+      paystack.newTransaction({
         key: PAYSTACK_PUBLIC_KEY,
         email: user.email,
-        amount: Math.round(amount * 100), 
+        amount: Math.round(amount * 100),
         currency: "NGN",
-        callback: async function (response: any) {
+        onSuccess: async (transaction: any) => {
           try {
             await updateDoc(userRef, {
               balance: increment(amount)
@@ -118,7 +119,7 @@ export function WalletCard() {
               service: "Wallet Fund (Paystack)",
               status: "success",
               createdAt: new Date().toISOString(),
-              reference: response.reference
+              reference: transaction.reference
             };
 
             const transactionsRef = collection(firestore, "users", user.uid, "transactions");
@@ -136,22 +137,30 @@ export function WalletCard() {
               description: `₦${amount.toLocaleString()} has been added to your balance.`,
             });
           } catch (e) {
-            console.error("Funding Callback Error:", e);
+            console.error("Funding Success Logic Error:", e);
           } finally {
             setIsFunding(false);
           }
         },
-        onClose: function () {
+        onCancel: () => {
           setIsFunding(false);
-          toast({ title: "Payment Cancelled", variant: "destructive" });
+          toast({ title: "Payment Cancelled", description: "You closed the payment gateway." });
         },
+        onError: (error: any) => {
+          setIsFunding(false);
+          console.error("Paystack Error:", error);
+          toast({ 
+            title: "Gateway Error", 
+            description: "Could not connect to Paystack. Ensure your domain is authorized in Paystack Dashboard.", 
+            variant: "destructive" 
+          });
+        }
       });
-      handler.openIframe();
     } catch (error) {
       setIsFunding(false);
       toast({ 
-        title: "Connection Error", 
-        description: "Could not connect to Paystack gateway.", 
+        title: "Initialization Error", 
+        description: "Failed to launch Paystack gateway.", 
         variant: "destructive" 
       });
     }
@@ -171,7 +180,7 @@ export function WalletCard() {
       return;
     }
 
-    if (withdrawData.pin !== profile.transactionPin) {
+    if (!profile.transactionPin || withdrawData.pin !== profile.transactionPin) {
       toast({ title: "Incorrect PIN", description: "Please enter your correct security PIN.", variant: "destructive" });
       return;
     }
@@ -189,7 +198,7 @@ export function WalletCard() {
         type: "withdrawal",
         amount: amount,
         service: "Wallet Withdrawal",
-        status: "pending", // Pending admin approval/processing
+        status: "pending",
         createdAt: new Date().toISOString(),
         bankDetails: {
           bankName: withdrawData.bankName,
@@ -204,7 +213,7 @@ export function WalletCard() {
       await createAINotification(
         firestore,
         user.uid,
-        `Withdrawal request for NGN ${amount.toLocaleString()} to ${withdrawData.bankName} has been submitted.`,
+        `Withdrawal request for NGN ${amount.toLocaleString()} to ${withdrawData.bankName} (${withdrawData.accountNumber}) has been submitted.`,
         user.displayName || ''
       );
 
@@ -228,7 +237,7 @@ export function WalletCard() {
   }) || "0.00";
 
   return (
-    <Card className="bg-primary text-primary-foreground overflow-hidden relative shadow-2xl border-none rounded-[2.5rem] transition-transform hover:scale-[1.01]">
+    <Card className="bg-primary text-primary-foreground overflow-hidden relative shadow-2xl border-none rounded-[2.5rem] transition-all hover:shadow-primary/30">
       <div className="absolute top-0 right-0 p-4 opacity-10">
         <WalletSVG size={140} />
       </div>
@@ -236,7 +245,7 @@ export function WalletCard() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <ShieldCheck size={16} className="text-accent" />
-            <p className="text-primary-foreground/80 text-[10px] font-black uppercase tracking-[0.2em]">Secure Live Wallet</p>
+            <p className="text-primary-foreground/80 text-[10px] font-black uppercase tracking-[0.2em]">Live Wallet Account</p>
           </div>
           <button onClick={() => setShowBalance(!showBalance)} className="hover:bg-white/10 rounded-full p-2 transition-colors">
             {showBalance ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -260,21 +269,21 @@ export function WalletCard() {
           <Dialog open={showWithdrawDialog} onOpenChange={setShowWithdrawDialog}>
             <DialogTrigger asChild>
               <Button variant="outline" className="flex-1 h-14 rounded-2xl bg-white/10 hover:bg-white/20 border-white/20 text-white shadow-md font-black text-lg transition-all active:scale-95">
-                <ArrowUpRight className="mr-2 h-6 w-6" /> Withdraw
+                <ArrowLeftRight className="mr-2 h-6 w-6" /> Transfer
               </Button>
             </DialogTrigger>
             <DialogContent className="rounded-[2.5rem] sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-2xl font-black flex items-center gap-2">
-                   <Landmark className="text-primary" /> Transfer Funds
+                   <Landmark className="text-primary" /> Withdraw Funds
                 </DialogTitle>
-                <DialogDescription className="font-medium">Withdraw balance to your local bank account.</DialogDescription>
+                <DialogDescription className="font-medium">Move your balance back to a local bank account.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Bank Name</Label>
+                  <Label>Recipient Bank</Label>
                   <Input 
-                    placeholder="e.g. Access Bank"
+                    placeholder="e.g. GTBank, Zenith"
                     className="h-12 rounded-xl"
                     value={withdrawData.bankName}
                     onChange={(e) => setWithdrawData({...withdrawData, bankName: e.target.value})}
@@ -291,7 +300,7 @@ export function WalletCard() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Amount to Withdraw (₦)</Label>
+                  <Label>Withdrawal Amount (₦)</Label>
                   <Input 
                     type="number"
                     placeholder="0.00"
@@ -299,15 +308,22 @@ export function WalletCard() {
                     value={withdrawData.amount}
                     onChange={(e) => setWithdrawData({...withdrawData, amount: e.target.value})}
                   />
-                  <p className="text-[10px] text-muted-foreground font-bold px-1">Available: ₦{balanceFormatted}</p>
+                  <div className="flex justify-between items-center px-1">
+                    <p className="text-[10px] text-muted-foreground font-bold">Max: ₦{balanceFormatted}</p>
+                    {profile && parseFloat(withdrawData.amount) > profile.balance && (
+                      <p className="text-[10px] text-destructive font-bold flex items-center gap-1">
+                        <AlertCircle size={10} /> Insufficient Balance
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Transaction PIN</Label>
+                  <Label>Security PIN</Label>
                   <Input 
                     type="password"
                     placeholder="••••"
                     maxLength={6}
-                    className="h-12 rounded-xl tracking-widest text-center font-bold"
+                    className="h-12 rounded-xl tracking-[1em] text-center font-bold"
                     value={withdrawData.pin}
                     onChange={(e) => setWithdrawData({...withdrawData, pin: e.target.value.replace(/\D/g, '')})}
                   />
@@ -315,9 +331,9 @@ export function WalletCard() {
                 <Button 
                   className="w-full h-14 rounded-2xl font-black text-lg mt-4 shadow-xl shadow-primary/20" 
                   onClick={handleWithdraw}
-                  disabled={isWithdrawing || !withdrawData.amount || !withdrawData.accountNumber}
+                  disabled={isWithdrawing || !withdrawData.amount || !withdrawData.accountNumber || !withdrawData.pin}
                 >
-                  {isWithdrawing ? <Loader2 className="animate-spin" /> : <><ArrowLeftRight className="mr-2" /> Confirm Transfer</>}
+                  {isWithdrawing ? <Loader2 className="animate-spin" /> : <><CheckCircle2 className="mr-2" /> Send to Bank</>}
                 </Button>
               </div>
             </DialogContent>
