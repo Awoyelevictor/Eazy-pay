@@ -1,16 +1,14 @@
 
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { Eye, EyeOff, Plus, ArrowUpRight, Loader2, ShieldCheck, Landmark, ArrowLeftRight, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Eye, EyeOff, Plus, Loader2, ShieldCheck, Landmark, ArrowLeftRight, CheckCircle2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUser, useDoc, useFirestore } from "@/firebase";
-import { doc, setDoc, updateDoc, increment, collection, addDoc } from "firebase/firestore";
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
+import { doc, updateDoc, increment, collection, addDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { PAYSTACK_PUBLIC_KEY } from "@/firebase/config";
 import { createAINotification } from "@/services/notification-service";
@@ -52,34 +50,8 @@ export function WalletCard() {
 
   const { data: profile, loading } = useDoc(userRef);
 
-  useEffect(() => {
-    if (user && !profile && !loading && firestore && userRef) {
-      const initialData = {
-        displayName: user.displayName || "User",
-        email: user.email || "",
-        balance: 0,
-        phoneNumber: user.phoneNumber || "",
-        createdAt: new Date().toISOString()
-      };
-      
-      setDoc(userRef, initialData, { merge: true })
-        .then(() => {
-           createAINotification(firestore, user.uid, "Welcome to Eazy-pay! Your live wallet is now active.", user.displayName || '');
-        })
-        .catch(async () => {
-          const permissionError = new FirestorePermissionError({
-            path: userRef.path,
-            operation: 'create',
-            requestResourceData: initialData,
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        });
-    }
-  }, [user, profile, loading, firestore, userRef]);
-
   /**
    * Internal function to handle successful funding processing.
-   * Separated from the Paystack callback to avoid 'async' function errors in the library.
    */
   const processFundingSuccess = async (reference: string, amount: number) => {
     if (!user || !firestore || !userRef) return;
@@ -155,20 +127,17 @@ export function WalletCard() {
         amount: Math.round(amount * 100),
         currency: "NGN",
         ref: reference,
-        // Use a plain function wrapper to avoid Paystack's "callback must be a valid function" error
         callback: function(response: any) {
           processFundingSuccess(response.reference || reference, amount);
         },
         onClose: function() {
           setIsFunding(false);
-          toast({ title: "Payment Cancelled", description: "The payment window was closed." });
         }
       });
 
       handler.openIframe();
     } catch (error) {
       setIsFunding(false);
-      console.error("Paystack Initialization Error:", error);
       toast({ 
         title: "Gateway Error", 
         description: "Could not launch Paystack.", 
@@ -187,12 +156,12 @@ export function WalletCard() {
     }
 
     if (amount > profile.balance) {
-      toast({ title: "Insufficient Balance", description: "You cannot withdraw more than your current balance.", variant: "destructive" });
+      toast({ title: "Insufficient Balance", variant: "destructive" });
       return;
     }
 
     if (!profile.transactionPin || withdrawData.pin !== profile.transactionPin) {
-      toast({ title: "Incorrect PIN", description: "Please enter your correct security PIN.", variant: "destructive" });
+      toast({ title: "Incorrect PIN", description: "Enter your 6-digit Security PIN.", variant: "destructive" });
       return;
     }
 
@@ -221,13 +190,13 @@ export function WalletCard() {
       await createAINotification(
         firestore,
         user.uid,
-        `Withdrawal of NGN ${amount.toLocaleString()} to ${withdrawData.bankName} (${withdrawData.accountNumber}) is being processed.`,
+        `Withdrawal of NGN ${amount.toLocaleString()} to ${withdrawData.bankName} is pending.`,
         user.displayName || ''
       );
 
       toast({
         title: "Withdrawal Requested",
-        description: `₦${amount.toLocaleString()} will be sent to your bank account soon.`,
+        description: `₦${amount.toLocaleString()} is being processed.`,
       });
 
       setWithdrawData({ amount: "", bankName: "", accountNumber: "", pin: "" });
@@ -253,7 +222,7 @@ export function WalletCard() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <ShieldCheck size={16} className="text-accent" />
-            <p className="text-primary-foreground/80 text-[10px] font-black uppercase tracking-[0.2em]">Live Wallet Account</p>
+            <p className="text-primary-foreground/80 text-[10px] font-black uppercase tracking-[0.2em]">Secure Live Wallet</p>
           </div>
           <button onClick={() => setShowBalance(!showBalance)} className="hover:bg-white/10 rounded-full p-2 transition-colors">
             {showBalance ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -271,21 +240,21 @@ export function WalletCard() {
             onClick={handleFundWallet}
             disabled={isFunding}
           >
-            {isFunding ? <Loader2 className="animate-spin" /> : <Plus className="mr-2 h-6 w-6" />} Fund Wallet
+            {isFunding ? <Loader2 className="animate-spin" /> : <Plus className="mr-2 h-6 w-6" />} Fund
           </Button>
 
           <Dialog open={showWithdrawDialog} onOpenChange={setShowWithdrawDialog}>
             <DialogTrigger asChild>
               <Button variant="outline" className="flex-1 h-14 rounded-2xl bg-white/10 hover:bg-white/20 border-white/20 text-white shadow-md font-black text-lg transition-all active:scale-95">
-                <ArrowLeftRight className="mr-2 h-6 w-6" /> Transfer
+                <ArrowLeftRight className="mr-2 h-6 w-6" /> Withdraw
               </Button>
             </DialogTrigger>
             <DialogContent className="rounded-[2.5rem] sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-2xl font-black flex items-center gap-2">
-                   <Landmark className="text-primary" /> Withdraw Funds
+                   <Landmark className="text-primary" /> Transfer to Bank
                 </DialogTitle>
-                <DialogDescription className="font-medium">Transfer funds from your Eazy-pay wallet to your bank.</DialogDescription>
+                <DialogDescription className="font-medium">Move your Eazy-pay funds back to your bank account.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -316,13 +285,13 @@ export function WalletCard() {
                     value={withdrawData.amount}
                     onChange={(e) => setWithdrawData({...withdrawData, amount: e.target.value})}
                   />
-                  <p className="text-[10px] text-muted-foreground font-bold px-1">Current Balance: ₦{balanceFormatted}</p>
+                  <p className="text-[10px] text-muted-foreground font-bold px-1">Available: ₦{balanceFormatted}</p>
                 </div>
                 <div className="space-y-2">
-                  <Label>Transaction PIN</Label>
+                  <Label>Security PIN</Label>
                   <Input 
                     type="password"
-                    placeholder="••••"
+                    placeholder="••••••"
                     maxLength={6}
                     className="h-12 rounded-xl tracking-[1em] text-center font-bold"
                     value={withdrawData.pin}
@@ -334,7 +303,7 @@ export function WalletCard() {
                   onClick={handleWithdraw}
                   disabled={isWithdrawing || !withdrawData.amount || !withdrawData.pin}
                 >
-                  {isWithdrawing ? <Loader2 className="animate-spin" /> : <><CheckCircle2 className="mr-2" /> Complete Transfer</>}
+                  {isWithdrawing ? <Loader2 className="animate-spin" /> : <><CheckCircle2 className="mr-2" /> Complete Withdrawal</>}
                 </Button>
               </div>
             </DialogContent>
