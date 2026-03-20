@@ -18,10 +18,13 @@ import { FirestorePermissionError } from '@/firebase/errors';
 
 /**
  * Fetch aggregated statistics for the admin dashboard.
+ * Optimized for parallel fetching and better error handling.
  */
 export async function getGlobalStats(db: Firestore) {
   try {
+    // Attempt to list all users. This requires 'list' permissions in Security Rules.
     const usersSnap = await getDocs(collection(db, 'users')).catch(async (err) => {
+      console.error("Admin Service: Permission Denied to list users collection.");
       const permissionError = new FirestorePermissionError({
         path: 'users',
         operation: 'list'
@@ -47,15 +50,22 @@ export async function getGlobalStats(db: Firestore) {
     let totalBalance = 0;
     const allTransactions: any[] = [];
     
-    const transactionPromises = users.map(async (user: any) => {
-      totalBalance += Number(user.balance) || 0;
+    // Fetch transaction sub-collections in parallel for all users
+    const transactionPromises = users.map(async (userDoc: any) => {
+      totalBalance += Number(userDoc.balance) || 0;
       
       try {
-        const txSnap = await getDocs(collection(db, 'users', user.id, 'transactions'));
-        const userTxs = txSnap.docs.map(d => ({ id: d.id, userId: user.id, userEmail: user.email, ...d.data() }));
+        const txSnap = await getDocs(collection(db, 'users', userDoc.id, 'transactions'));
+        const userTxs = txSnap.docs.map(d => ({ 
+          id: d.id, 
+          userId: userDoc.id, 
+          userEmail: userDoc.email, 
+          ...d.data() 
+        }));
         allTransactions.push(...userTxs);
       } catch (e) {
-        console.warn(`Admin: Could not fetch transactions for user ${user.id}`);
+        // We warn but don't fail the whole process if one user's tx list is restricted
+        console.warn(`Admin Service: Restricted access to transactions for user ${userDoc.id}`);
       }
     });
 
@@ -73,11 +83,11 @@ export async function getGlobalStats(db: Firestore) {
       totalVolume,
       activeBalance: totalBalance,
       successRate,
-      transactions: allTransactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-      users: users.sort((a, b) => (b.balance || 0) - (a.balance || 0))
+      transactions: allTransactions.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()),
+      users: users.sort((a, b) => (Number(b.balance) || 0) - (Number(a.balance) || 0))
     };
   } catch (error: any) {
-    console.error("Global Stats Fetch Error:", error);
+    console.error("Global Stats Aggregate Failure:", error);
     throw error;
   }
 }

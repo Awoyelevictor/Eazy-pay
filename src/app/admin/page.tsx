@@ -19,7 +19,8 @@ import {
   CreditCard,
   UserCheck,
   ArrowUpDown,
-  Wallet
+  Wallet,
+  ShieldX
 } from 'lucide-react';
 import { 
   Card, 
@@ -30,6 +31,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useFirestore, useUser } from '@/firebase';
 import { getGlobalStats, broadcastGlobalNotification, adminUpdateUserBalance } from '@/services/admin-service';
 import { adminAssistant } from '@/ai/flows/admin-assistant-flow';
@@ -77,8 +79,8 @@ export default function AdminDashboard() {
       const data = await getGlobalStats(db);
       setStats(data);
     } catch (e: any) {
-      console.error(e);
-      setError("Failed to sync users. Ensure you have Admin permissions in Security Rules.");
+      console.error("Dashboard Sync Error:", e);
+      setError("Security Access Restricted. Ensure you have 'Admin' privileges and 'List' permissions enabled in Firestore Security Rules.");
     } finally {
       setLoading(false);
     }
@@ -124,10 +126,12 @@ export default function AdminDashboard() {
 
   const filteredUsers = useMemo(() => {
     if (!stats?.users) return [];
-    return stats.users.filter((u: any) => 
-      u.email?.toLowerCase().includes(userSearch.toLowerCase()) || 
-      u.displayName?.toLowerCase().includes(userSearch.toLowerCase())
-    );
+    return stats.users.filter((u: any) => {
+      const email = u.email?.toLowerCase() || "";
+      const name = u.displayName?.toLowerCase() || "";
+      const search = userSearch.toLowerCase();
+      return email.includes(search) || name.includes(search);
+    });
   }, [stats, userSearch]);
 
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
@@ -153,6 +157,16 @@ export default function AdminDashboard() {
           <RefreshCcw className="mr-2 h-4 w-4" /> Sync Live Data
         </Button>
       </header>
+
+      {error && (
+        <Alert variant="destructive" className="mb-8 rounded-[1.5rem] border-2 bg-red-50">
+          <ShieldX className="h-5 w-5" />
+          <AlertTitle className="font-black">Access Denied</AlertTitle>
+          <AlertDescription className="text-xs font-medium">
+            {error}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -214,18 +228,18 @@ export default function AdminDashboard() {
                     {filteredUsers.map((u: any) => (
                       <tr key={u.id} className="group hover:bg-slate-50 transition-colors">
                         <td className="py-4">
-                          <p className="font-bold text-sm">{u.displayName || 'Unknown User'}</p>
+                          <p className="font-bold text-sm">{u.displayName || 'Unnamed User'}</p>
                           <p className="text-xs text-slate-400">{u.email}</p>
                         </td>
-                        <td className="py-4 font-black text-primary">₦{(u.balance || 0).toLocaleString()}</td>
+                        <td className="py-4 font-black text-primary">₦{(Number(u.balance) || 0).toLocaleString()}</td>
                         <td className="py-4">
                           <Button 
                             variant="ghost" 
                             size="sm" 
                             className="rounded-lg h-8 text-[10px] font-black uppercase tracking-widest gap-2"
                             onClick={() => {
-                              setEditingBalance({ id: u.id, email: u.email, current: u.balance || 0 });
-                              setNewBalanceValue((u.balance || 0).toString());
+                              setEditingBalance({ id: u.id, email: u.email, current: Number(u.balance) || 0 });
+                              setNewBalanceValue((Number(u.balance) || 0).toString());
                             }}
                           >
                             <ArrowUpDown size={14} /> Adjust Balance
@@ -235,7 +249,9 @@ export default function AdminDashboard() {
                     ))}
                     {filteredUsers.length === 0 && (
                       <tr>
-                        <td colSpan={3} className="py-12 text-center text-slate-400 italic">No users found matching "{userSearch}"</td>
+                        <td colSpan={3} className="py-12 text-center text-slate-400 italic">
+                          {userSearch ? `No users matching "${userSearch}"` : "Waiting for directory sync..."}
+                        </td>
                       </tr>
                     )}
                   </tbody>
