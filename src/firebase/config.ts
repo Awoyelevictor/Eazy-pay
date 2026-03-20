@@ -15,8 +15,9 @@ const firebaseConfig = {
   measurementId: "G-31S8D2K21K"
 };
 
-// Paystack Public Key for live transactions
+// Paystack Live Keys
 export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83ace52";
+export const PAYSTACK_SECRET_KEY = "sk_live_03ae68bc0e27e4b595e18cf9960ce75c22143e21";
 
 /** 
  * VTPASS API CONFIGURATION (Airtime, Data, Utilities)
@@ -33,7 +34,7 @@ export const VTU_CONFIG = {
  */
 export const PAY1ST_CONFIG = {
   API_KEY: "PAY1ST_API_KEY_HERE",
-  BASE_URL: "https://api.carry1st.com/v1", // Using Carry1st Shop Gateway as requested
+  BASE_URL: "https://api.carry1st.com/v1",
 };
 
 /**

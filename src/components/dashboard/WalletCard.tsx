@@ -79,10 +79,11 @@ export function WalletCard() {
   const handleFundWallet = async () => {
     if (!user || !firestore || !userRef) return;
     
+    // Ensure PaystackPop is available on the window
     if (!window.PaystackPop) {
       toast({
         title: "Connection Error",
-        description: "Paystack gateway is not reachable. Check your internet connection.",
+        description: "Paystack script is not loaded yet. Please wait a moment.",
         variant: "destructive"
       });
       return;
@@ -100,15 +101,17 @@ export function WalletCard() {
     setIsFunding(true);
 
     try {
-      // Modern PaystackPop constructor usage
-      const paystack = new window.PaystackPop();
-      paystack.newTransaction({
+      const reference = `EP-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+      
+      const handler = window.PaystackPop.setup({
         key: PAYSTACK_PUBLIC_KEY,
         email: user.email,
         amount: Math.round(amount * 100),
         currency: "NGN",
-        onSuccess: async (transaction: any) => {
+        ref: reference,
+        callback: async (response: any) => {
           try {
+            // Update Firestore Balance
             await updateDoc(userRef, {
               balance: increment(amount)
             });
@@ -119,7 +122,7 @@ export function WalletCard() {
               service: "Wallet Fund (Paystack)",
               status: "success",
               createdAt: new Date().toISOString(),
-              reference: transaction.reference
+              reference: response.reference
             };
 
             const transactionsRef = collection(firestore, "users", user.uid, "transactions");
@@ -134,33 +137,27 @@ export function WalletCard() {
 
             toast({ 
               title: "Funding Successful!", 
-              description: `₦${amount.toLocaleString()} has been added to your balance.`,
+              description: `₦${amount.toLocaleString()} added to your balance.`,
             });
           } catch (e) {
-            console.error("Funding Success Logic Error:", e);
+            console.error("Funding UI Update Error:", e);
           } finally {
             setIsFunding(false);
           }
         },
-        onCancel: () => {
+        onClose: () => {
           setIsFunding(false);
-          toast({ title: "Payment Cancelled", description: "You closed the payment gateway." });
-        },
-        onError: (error: any) => {
-          setIsFunding(false);
-          console.error("Paystack Error:", error);
-          toast({ 
-            title: "Gateway Error", 
-            description: "Could not connect to Paystack. Ensure your domain is authorized in Paystack Dashboard.", 
-            variant: "destructive" 
-          });
+          toast({ title: "Payment Cancelled", description: "The payment window was closed." });
         }
       });
+
+      handler.openIframe();
     } catch (error) {
       setIsFunding(false);
+      console.error("Paystack Initialization Error:", error);
       toast({ 
-        title: "Initialization Error", 
-        description: "Failed to launch Paystack gateway.", 
+        title: "Gateway Error", 
+        description: "Could not launch Paystack. Check your internet connection.", 
         variant: "destructive" 
       });
     }
@@ -188,12 +185,10 @@ export function WalletCard() {
     setIsWithdrawing(true);
 
     try {
-      // 1. Deduct from balance
       await updateDoc(userRef, {
         balance: increment(-amount)
       });
 
-      // 2. Create withdrawal transaction
       const transactionData = {
         type: "withdrawal",
         amount: amount,
@@ -209,23 +204,22 @@ export function WalletCard() {
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
 
-      // 3. AI Notification
       await createAINotification(
         firestore,
         user.uid,
-        `Withdrawal request for NGN ${amount.toLocaleString()} to ${withdrawData.bankName} (${withdrawData.accountNumber}) has been submitted.`,
+        `Withdrawal of NGN ${amount.toLocaleString()} to ${withdrawData.bankName} (${withdrawData.accountNumber}) is being processed.`,
         user.displayName || ''
       );
 
       toast({
-        title: "Withdrawal Submitted",
-        description: `₦${amount.toLocaleString()} will be sent to your account shortly.`,
+        title: "Withdrawal Requested",
+        description: `₦${amount.toLocaleString()} will be sent to your bank account soon.`,
       });
 
       setWithdrawData({ amount: "", bankName: "", accountNumber: "", pin: "" });
       setShowWithdrawDialog(false);
     } catch (error: any) {
-      toast({ title: "Withdrawal Failed", description: error.message, variant: "destructive" });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
       setIsWithdrawing(false);
     }
@@ -277,13 +271,13 @@ export function WalletCard() {
                 <DialogTitle className="text-2xl font-black flex items-center gap-2">
                    <Landmark className="text-primary" /> Withdraw Funds
                 </DialogTitle>
-                <DialogDescription className="font-medium">Move your balance back to a local bank account.</DialogDescription>
+                <DialogDescription className="font-medium">Transfer funds from your Eazy-pay wallet to your bank.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Recipient Bank</Label>
+                  <Label>Bank Name</Label>
                   <Input 
-                    placeholder="e.g. GTBank, Zenith"
+                    placeholder="e.g. UBA, Kuda"
                     className="h-12 rounded-xl"
                     value={withdrawData.bankName}
                     onChange={(e) => setWithdrawData({...withdrawData, bankName: e.target.value})}
@@ -300,7 +294,7 @@ export function WalletCard() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Withdrawal Amount (₦)</Label>
+                  <Label>Amount (₦)</Label>
                   <Input 
                     type="number"
                     placeholder="0.00"
@@ -308,17 +302,10 @@ export function WalletCard() {
                     value={withdrawData.amount}
                     onChange={(e) => setWithdrawData({...withdrawData, amount: e.target.value})}
                   />
-                  <div className="flex justify-between items-center px-1">
-                    <p className="text-[10px] text-muted-foreground font-bold">Max: ₦{balanceFormatted}</p>
-                    {profile && parseFloat(withdrawData.amount) > profile.balance && (
-                      <p className="text-[10px] text-destructive font-bold flex items-center gap-1">
-                        <AlertCircle size={10} /> Insufficient Balance
-                      </p>
-                    )}
-                  </div>
+                  <p className="text-[10px] text-muted-foreground font-bold px-1">Current Balance: ₦{balanceFormatted}</p>
                 </div>
                 <div className="space-y-2">
-                  <Label>Security PIN</Label>
+                  <Label>Transaction PIN</Label>
                   <Input 
                     type="password"
                     placeholder="••••"
@@ -331,9 +318,9 @@ export function WalletCard() {
                 <Button 
                   className="w-full h-14 rounded-2xl font-black text-lg mt-4 shadow-xl shadow-primary/20" 
                   onClick={handleWithdraw}
-                  disabled={isWithdrawing || !withdrawData.amount || !withdrawData.accountNumber || !withdrawData.pin}
+                  disabled={isWithdrawing || !withdrawData.amount || !withdrawData.pin}
                 >
-                  {isWithdrawing ? <Loader2 className="animate-spin" /> : <><CheckCircle2 className="mr-2" /> Send to Bank</>}
+                  {isWithdrawing ? <Loader2 className="animate-spin" /> : <><CheckCircle2 className="mr-2" /> Complete Transfer</>}
                 </Button>
               </div>
             </DialogContent>
