@@ -16,7 +16,8 @@ import {
   Key,
   Edit2,
   Save,
-  Lock
+  Lock,
+  AlertCircle
 } from "lucide-react";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useUser, useAuth, useFirestore, useDoc } from "@/firebase";
-import { signOut, updateProfile } from "firebase/auth";
+import { signOut, updateProfile, updatePassword } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -81,12 +82,32 @@ export default function ProfilePage() {
     setIsEditingLoading(true);
 
     try {
-      // 1. Update Auth Profile
+      // 1. Update Auth Profile (Display Name)
       await updateProfile(user, {
         displayName: editData.displayName
       });
 
-      // 2. Update Firestore Doc
+      // 2. Update Auth Password (PIN)
+      // Note: Firebase updatePassword might require recent-login. 
+      // If it fails, we still update Firestore but notify user.
+      try {
+        if (editData.transactionPin && editData.transactionPin.length >= 6) {
+          await updatePassword(user, editData.transactionPin);
+        }
+      } catch (authError: any) {
+        console.warn("Auth password update failed (likely needs recent login):", authError);
+        if (authError.code === 'auth/requires-recent-login') {
+          toast({ 
+            title: "Security Update Needed", 
+            description: "To change your PIN, please sign out and sign back in first.", 
+            variant: "destructive" 
+          });
+          setIsEditingLoading(false);
+          return;
+        }
+      }
+
+      // 3. Update Firestore Doc
       await updateDoc(userRef, {
         displayName: editData.displayName,
         phoneNumber: editData.phoneNumber,
@@ -128,7 +149,7 @@ export default function ProfilePage() {
             <h1 className="text-2xl font-black">{user.displayName || "User"}</h1>
             <p className="text-sm opacity-80">{user.email}</p>
             <div className="mt-2 inline-flex items-center px-3 py-1 rounded-full bg-white/20 text-[10px] font-bold uppercase tracking-wider">
-              Production Verified Account
+              Secure Live Account
             </div>
           </div>
         </div>
@@ -166,7 +187,7 @@ export default function ProfilePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Transaction PIN (4-6 digits)</Label>
+                  <Label>New Security PIN (Min 6 digits)</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
                     <Input 
@@ -177,6 +198,7 @@ export default function ProfilePage() {
                       className="h-12 pl-10 rounded-xl font-bold tracking-[0.5em]"
                     />
                   </div>
+                  <p className="text-[9px] text-muted-foreground italic px-1">Note: This will also update your login password.</p>
                 </div>
                 <Button className="w-full h-14 rounded-2xl font-black text-lg mt-4" onClick={handleSaveProfile} disabled={isSaving}>
                   {isSaving ? <Loader2 className="animate-spin" /> : <><Save size={20} className="mr-2" /> Save Changes</>}
@@ -188,31 +210,20 @@ export default function ProfilePage() {
 
         {/* Authentication Summary */}
         <section className="space-y-3">
-          <h2 className="text-xs font-black text-muted-foreground uppercase tracking-widest px-1">Account Authentication</h2>
+          <h2 className="text-xs font-black text-muted-foreground uppercase tracking-widest px-1">Security Status</h2>
           <Card className="rounded-3xl border-none shadow-sm bg-secondary/30">
             <CardContent className="p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-primary shadow-sm">
-                    <Mail size={20} />
+                    <Shield size={20} />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-muted-foreground uppercase leading-none mb-1">Signed in via</p>
-                    <p className="text-sm font-bold">Email & PIN</p>
+                    <p className="text-[10px] font-black text-muted-foreground uppercase leading-none mb-1">Protection</p>
+                    <p className="text-sm font-bold">PIN Secured</p>
                   </div>
                 </div>
                 <div className="px-2 py-1 rounded-lg bg-green-100 text-green-700 text-[10px] font-black uppercase">Active</div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-white flex items-center justify-center text-primary shadow-sm">
-                    <Key size={20} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-muted-foreground uppercase leading-none mb-1">User ID</p>
-                    <p className="text-[10px] font-mono opacity-60 truncate max-w-[150px]">{user.uid}</p>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -227,8 +238,8 @@ export default function ProfilePage() {
         </Button>
 
         <p className="text-center text-[10px] text-muted-foreground font-medium">
-          Eazy-pay App v2.6.0 (Live Production)<br/>
-          Securely powered by Firebase & Paystack
+          Eazy-pay Secure Account<br/>
+          Protected by Firebase Authentication
         </p>
       </main>
 
