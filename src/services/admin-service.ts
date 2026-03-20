@@ -40,7 +40,7 @@ export async function getGlobalStats(db: Firestore) {
         const txSnap = await getDocs(collection(db, 'users', userDoc.id, 'transactions'));
         allTransactions.push(...txSnap.docs.map(d => ({ id: d.id, userId: userDoc.id, ...d.data() })));
       } catch (e) {
-        console.warn(`Admin Service: Restricted access to tx for user ${userDoc.id}`);
+        // Silent catch for individual user tx if restricted
       }
     });
 
