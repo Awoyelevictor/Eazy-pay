@@ -5,153 +5,32 @@
       "description": "User account information, balance, and security PIN",
       "type": "object",
       "properties": {
-        "displayName": {
-          "type": "string"
-        },
-        "email": {
-          "type": "string"
-        },
-        "balance": {
-          "type": "number",
-          "description": "Wallet balance in NGN"
-        },
-        "phoneNumber": {
-          "type": "string"
-        },
-        "transactionPin": {
-          "type": "string",
-          "description": "4-6 digit security PIN for transactions and login"
-        },
-        "isVerified": {
-          "type": "boolean",
-          "description": "Whether the user has verified their email/OTP"
-        }
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "balance": { "type": "number" },
+        "phoneNumber": { "type": "string" },
+        "transactionPin": { "type": "string" },
+        "isVerified": { "type": "boolean" }
       },
-      "required": [
-        "email",
-        "balance",
-        "transactionPin"
-      ]
+      "required": ["email", "balance", "transactionPin"]
     },
     "Transaction": {
       "title": "Transaction",
       "description": "History of purchases or top-ups",
       "type": "object",
       "properties": {
-        "type": {
-          "type": "string",
-          "enum": [
-            "airtime",
-            "data",
-            "funding",
-            "withdrawal",
-            "electricity",
-            "cable",
-            "games",
-            "insurance"
-          ]
-        },
-        "amount": {
-          "type": "number"
-        },
-        "service": {
-          "type": "string",
-          "description": "The specific bundle or service name"
-        },
-        "network": {
-          "type": "string"
-        },
-        "recipient": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "success",
-            "pending",
-            "failed"
-          ]
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "aiGenerated": {
-          "type": "boolean"
-        },
-        "bankDetails": {
-          "type": "object",
-          "properties": {
-            "bankName": { "type": "string" },
-            "accountNumber": { "type": "string" }
-          }
-        }
+        "type": { "type": "string", "enum": ["airtime", "data", "funding", "withdrawal", "electricity", "cable", "games"] },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["success", "pending", "failed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "type",
-        "amount",
-        "status",
-        "createdAt"
-      ]
-    },
-    "Notification": {
-      "title": "Notification",
-      "description": "User notification messages",
-      "type": "object",
-      "properties": {
-        "title": {
-          "type": "string"
-        },
-        "message": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string",
-          "enum": [
-            "info",
-            "success",
-            "warning",
-            "error"
-          ]
-        },
-        "read": {
-          "type": "boolean"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "actionUrl": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "title",
-        "message",
-        "type",
-        "read",
-        "createdAt"
-      ]
+      "required": ["type", "amount", "status", "createdAt"]
     }
   },
-  "auth": {
-    "providers": [
-      "password"
-    ]
-  },
+  "auth": { "providers": ["password"] },
   "firestore": {
-    "/users/{userId}": {
-      "schema": "UserProfile",
-      "description": "User profile with balance and PIN security"
-    },
-    "/users/{userId}/transactions/{transactionId}": {
-      "schema": "Transaction",
-      "description": "User transaction history"
-    },
-    "/users/{userId}/notifications/{notificationId}": {
-      "schema": "Notification",
-      "description": "User notification messages"
-    }
+    "/users/{userId}": { "schema": "UserProfile", "description": "User profile" },
+    "/users/{userId}/transactions/{transactionId}": { "schema": "Transaction", "description": "User transaction history" }
   }
 }
-// Triggering security rules deployment to ensure admin analysis has list access for multi-user visualization.
+// Metadata Sync: Triggering rule update to ensure Admin directory listing and direct user lookups are enabled.

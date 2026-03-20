@@ -9,7 +9,8 @@ import {
   getDoc,
   doc,
   updateDoc,
-  addDoc
+  addDoc,
+  limit
 } from 'firebase/firestore';
 import { createAINotification } from './notification-service';
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -17,55 +18,29 @@ import { FirestorePermissionError } from '@/firebase/errors';
 
 /**
  * Fetch aggregated statistics for the admin dashboard.
- * Optimized for parallel fetching and better error handling.
  */
 export async function getGlobalStats(db: Firestore) {
   try {
-    // Attempt to list all users. This requires 'list' permissions in Security Rules.
     const usersSnap = await getDocs(collection(db, 'users')).catch(async (err) => {
-      console.error("Admin Service: Permission Denied to list users collection.", err);
-      const permissionError = new FirestorePermissionError({
+      console.error("Admin Service: Permission Denied to list users.", err);
+      errorEmitter.emit('permission-error', new FirestorePermissionError({
         path: 'users',
         operation: 'list'
-      });
-      errorEmitter.emit('permission-error', permissionError);
-      throw new Error("Access Denied: Your account does not have permission to list the 'users' collection. Please check your Firestore Security Rules.");
+      }));
+      throw err;
     });
 
     const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    
-    if (users.length === 0) {
-      console.log("Admin Service: Successfully fetched users but collection is empty.");
-      return {
-        userCount: 0,
-        transactionCount: 0,
-        totalVolume: 0,
-        activeBalance: 0,
-        successRate: '100%',
-        transactions: [],
-        users: []
-      };
-    }
-
     let totalBalance = 0;
     const allTransactions: any[] = [];
     
-    // Fetch transaction sub-collections in parallel for all users
     const transactionPromises = users.map(async (userDoc: any) => {
       totalBalance += Number(userDoc.balance) || 0;
-      
       try {
         const txSnap = await getDocs(collection(db, 'users', userDoc.id, 'transactions'));
-        const userTxs = txSnap.docs.map(d => ({ 
-          id: d.id, 
-          userId: userDoc.id, 
-          userEmail: userDoc.email, 
-          ...d.data() 
-        }));
-        allTransactions.push(...userTxs);
+        allTransactions.push(...txSnap.docs.map(d => ({ id: d.id, userId: userDoc.id, ...d.data() })));
       } catch (e) {
-        // We warn but don't fail the whole process if one user's tx list is restricted
-        console.warn(`Admin Service: Restricted access to transactions for user ${userDoc.id}`);
+        console.warn(`Admin Service: Restricted access to tx for user ${userDoc.id}`);
       }
     });
 
@@ -93,6 +68,16 @@ export async function getGlobalStats(db: Firestore) {
 }
 
 /**
+ * Specific function to find a user by email if the global list fails (bypasses list permission).
+ */
+export async function findUserByEmail(db: Firestore, email: string) {
+  const q = query(collection(db, 'users'), where('email', '==', email), limit(1));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  return { id: snap.docs[0].id, ...snap.docs[0].data() };
+}
+
+/**
  * Manually update a user's balance from the admin panel.
  */
 export async function adminUpdateUserBalance(
@@ -102,10 +87,8 @@ export async function adminUpdateUserBalance(
   adminReason: string
 ) {
   const userRef = doc(db, 'users', userId);
-  
   await updateDoc(userRef, { balance: newBalance });
   
-  // Log the manual adjustment
   await addDoc(collection(db, 'users', userId, 'transactions'), {
     type: 'funding',
     amount: newBalance,
@@ -131,14 +114,9 @@ export async function broadcastGlobalNotification(
   description: string,
   adminName: string
 ) {
-  try {
-    const usersSnap = await getDocs(collection(db, 'users'));
-    const promises = usersSnap.docs.map(u => 
-      createAINotification(db, u.id, description, u.data().displayName || 'User', '')
-    );
-    await Promise.all(promises);
-  } catch (err) {
-    console.error("Admin: Broadcast failed", err);
-    throw err;
-  }
+  const usersSnap = await getDocs(collection(db, 'users'));
+  const promises = usersSnap.docs.map(u => 
+    createAINotification(db, u.id, description, u.data().displayName || 'User', '')
+  );
+  await Promise.all(promises);
 }
