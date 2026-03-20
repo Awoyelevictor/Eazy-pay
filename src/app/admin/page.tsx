@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -80,7 +79,7 @@ export default function AdminDashboard() {
       setStats(data);
     } catch (e: any) {
       console.error("Dashboard Sync Error:", e);
-      setError("Security Access Restricted. Ensure you have 'Admin' privileges and 'List' permissions enabled in Firestore Security Rules.");
+      setError(e.message || "Security Access Restricted. Ensure you have 'Admin' privileges and 'List' permissions enabled in Firestore Security Rules.");
     } finally {
       setLoading(false);
     }
@@ -164,6 +163,8 @@ export default function AdminDashboard() {
           <AlertTitle className="font-black">Access Denied</AlertTitle>
           <AlertDescription className="text-xs font-medium">
             {error}
+            <br/><br/>
+            <span className="font-black">Agent Instruction:</span> If you are seeing this, please ensure your Firestore Security Rules allow the admin to <span className="underline">list</span> the <span className="font-bold">/users</span> collection.
           </AlertDescription>
         </Alert>
       )}

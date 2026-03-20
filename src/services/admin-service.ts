@@ -1,4 +1,3 @@
-
 'use client';
 
 import { 
@@ -24,13 +23,13 @@ export async function getGlobalStats(db: Firestore) {
   try {
     // Attempt to list all users. This requires 'list' permissions in Security Rules.
     const usersSnap = await getDocs(collection(db, 'users')).catch(async (err) => {
-      console.error("Admin Service: Permission Denied to list users collection.");
+      console.error("Admin Service: Permission Denied to list users collection.", err);
       const permissionError = new FirestorePermissionError({
         path: 'users',
         operation: 'list'
       });
       errorEmitter.emit('permission-error', permissionError);
-      throw err;
+      throw new Error("Access Denied: Your account does not have permission to list the 'users' collection. Please check your Firestore Security Rules.");
     });
 
     const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
