@@ -1,3 +1,4 @@
+
 'use client';
 
 import { 
@@ -20,6 +21,8 @@ import { FirestorePermissionError } from '@/firebase/errors';
 export async function getGlobalStats(db: Firestore) {
   try {
     // 1. Fetch all users
+    // If this fails with a permission error, it's usually because the admin user
+    // hasn't been granted 'list' access on the /users collection in Security Rules.
     const usersSnap = await getDocs(collection(db, 'users')).catch(async (err) => {
       const permissionError = new FirestorePermissionError({
         path: 'users',
@@ -55,6 +58,8 @@ export async function getGlobalStats(db: Firestore) {
         const userTxs = txSnap.docs.map(d => ({ id: d.id, userId: user.id, ...d.data() }));
         allTransactions.push(...userTxs);
       } catch (e) {
+        // If we can't see a specific user's transactions, we skip it for the aggregate
+        // but log the error contextually if needed.
         console.warn(`Admin: Could not fetch transactions for user ${user.id}`);
       }
     });

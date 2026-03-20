@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "UserProfile": {
@@ -154,4 +155,4 @@
     }
   }
 }
-// Triggering security rules deployment to ensure admin analysis has list access.
+// Triggering security rules deployment to ensure admin analysis has list access for multi-user visualization.

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -76,14 +77,59 @@ export function WalletCard() {
     }
   }, [user, profile, loading, firestore, userRef]);
 
-  const handleFundWallet = async () => {
+  /**
+   * Internal function to handle successful funding processing.
+   * Separated from the Paystack callback to avoid 'async' function errors in the library.
+   */
+  const processFundingSuccess = async (reference: string, amount: number) => {
     if (!user || !firestore || !userRef) return;
+
+    try {
+      // 1. Update Firestore Balance
+      await updateDoc(userRef, {
+        balance: increment(amount)
+      });
+
+      const transactionData = {
+        type: "funding",
+        amount: amount,
+        service: "Wallet Fund (Paystack)",
+        status: "success",
+        createdAt: new Date().toISOString(),
+        reference: reference
+      };
+
+      // 2. Log transaction
+      const transactionsRef = collection(firestore, "users", user.uid, "transactions");
+      await addDoc(transactionsRef, transactionData);
+
+      // 3. Notify user
+      await createAINotification(
+        firestore, 
+        user.uid, 
+        `Successfully funded wallet with NGN ${amount.toLocaleString()} via Paystack`,
+        user.displayName || ''
+      );
+
+      toast({ 
+        title: "Funding Successful!", 
+        description: `₦${amount.toLocaleString()} added to your balance.`,
+      });
+    } catch (e: any) {
+      console.error("Funding Success Processing Error:", e);
+      toast({ title: "Update Failed", description: "Payment was successful but balance update failed. Please contact support.", variant: "destructive" });
+    } finally {
+      setIsFunding(false);
+    }
+  };
+
+  const handleFundWallet = async () => {
+    if (!user || !firestore || !userRef || !user.email) return;
     
-    // Ensure PaystackPop is available on the window
     if (!window.PaystackPop) {
       toast({
         title: "Connection Error",
-        description: "Paystack script is not loaded yet. Please wait a moment.",
+        description: "Paystack script is not loaded yet. Please refresh the page.",
         variant: "destructive"
       });
       return;
@@ -109,43 +155,11 @@ export function WalletCard() {
         amount: Math.round(amount * 100),
         currency: "NGN",
         ref: reference,
-        callback: async (response: any) => {
-          try {
-            // Update Firestore Balance
-            await updateDoc(userRef, {
-              balance: increment(amount)
-            });
-
-            const transactionData = {
-              type: "funding",
-              amount: amount,
-              service: "Wallet Fund (Paystack)",
-              status: "success",
-              createdAt: new Date().toISOString(),
-              reference: response.reference
-            };
-
-            const transactionsRef = collection(firestore, "users", user.uid, "transactions");
-            await addDoc(transactionsRef, transactionData);
-
-            await createAINotification(
-              firestore, 
-              user.uid, 
-              `Successfully funded wallet with NGN ${amount.toLocaleString()} via Paystack`,
-              user.displayName || ''
-            );
-
-            toast({ 
-              title: "Funding Successful!", 
-              description: `₦${amount.toLocaleString()} added to your balance.`,
-            });
-          } catch (e) {
-            console.error("Funding UI Update Error:", e);
-          } finally {
-            setIsFunding(false);
-          }
+        // Use a plain function wrapper to avoid Paystack's "callback must be a valid function" error
+        callback: function(response: any) {
+          processFundingSuccess(response.reference || reference, amount);
         },
-        onClose: () => {
+        onClose: function() {
           setIsFunding(false);
           toast({ title: "Payment Cancelled", description: "The payment window was closed." });
         }
@@ -157,7 +171,7 @@ export function WalletCard() {
       console.error("Paystack Initialization Error:", error);
       toast({ 
         title: "Gateway Error", 
-        description: "Could not launch Paystack. Check your internet connection.", 
+        description: "Could not launch Paystack.", 
         variant: "destructive" 
       });
     }
