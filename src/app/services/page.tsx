@@ -12,12 +12,14 @@ import {
   ArrowLeft,
   Search,
   ChevronRight,
-  Gamepad2
+  Gamepad2,
+  Timer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 const services = [
   { 
@@ -30,7 +32,7 @@ const services = [
   { 
     category: "Entertainment & Gaming",
     items: [
-      { icon: Gamepad2, label: "Game Top-up", desc: "COD, Free Fire, Bloodstrike", href: "/services/games", color: "bg-orange-500" },
+      { icon: Gamepad2, label: "Game Top-up", desc: "COD, Free Fire, Bloodstrike", href: "/services/games", color: "bg-orange-500", badge: "Coming Soon" },
       { icon: Tv, label: "Cable TV", desc: "DStv, GOtv, and StarTimes", href: "/services/cable", color: "bg-purple-500" },
     ]
   },
@@ -86,7 +88,14 @@ export default function ServicesPage() {
                           <item.icon size={22} />
                         </div>
                         <div>
-                          <h3 className="font-bold text-sm">{item.label}</h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-sm">{item.label}</h3>
+                            {item.badge && (
+                              <Badge variant="secondary" className="text-[8px] h-4 px-1 bg-accent text-accent-foreground border-none font-black uppercase">
+                                {item.badge}
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-[10px] text-muted-foreground">{item.desc}</p>
                         </div>
                       </div>

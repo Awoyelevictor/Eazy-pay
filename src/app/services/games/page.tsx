@@ -1,211 +1,72 @@
+
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Info, Loader2, Gamepad2 } from "lucide-react";
+import { ArrowLeft, Gamepad2, Timer, BellRing, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { useUser, useFirestore, useDoc } from "@/firebase";
-import { doc, collection, addDoc, setDoc, increment } from "firebase/firestore";
-import { processPay1stGameTopup, getPay1stProducts } from "@/app/actions/pay1st";
-import { createAINotification } from "@/services/notification-service";
 
-const gameProviders = [
-  { name: "Bloodstrike Credits", pay1stId: "BLOODSTRIKE", icon: Gamepad2 },
-  { name: "Call of Duty Mobile", pay1stId: "CODM", icon: Gamepad2 },
-  { name: "Free Fire Diamonds", pay1stId: "FREEFIRE", icon: Gamepad2 },
-  { name: "Mobile Legends", pay1stId: "MOBILE_LEGENDS", icon: Gamepad2 },
-  { name: "PUBG Mobile UC", pay1stId: "PUBG", icon: Gamepad2 },
-];
-
-export default function GameTopupPage() {
-  const { user } = useUser();
-  const firestore = useFirestore();
-  const { toast } = useToast();
-
-  const [selectedGame, setSelectedGame] = useState<typeof gameProviders[0] | null>(null);
-  const [playerId, setPlayerId] = useState("");
-  const [variations, setVariations] = useState<any[]>([]);
-  const [selectedSku, setSelectedSku] = useState("");
-  const [loadingVariations, setLoadingVariations] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-
-  const userRef = useMemo(() => {
-    if (!firestore || !user) return null;
-    return doc(firestore, "users", user.uid);
-  }, [firestore, user]);
-
-  const { data: profile } = useDoc(userRef);
-
-  useEffect(() => {
-    const fetchBundles = async () => {
-      if (!selectedGame) return;
-      setLoadingVariations(true);
-      setVariations([]);
-      setSelectedSku("");
-      try {
-        const data = await getPay1stProducts();
-        const gameProducts = data.filter((p: any) => 
-          p.category?.toUpperCase() === selectedGame.pay1stId || 
-          p.brand?.toUpperCase() === selectedGame.pay1stId ||
-          p.name.toUpperCase().includes(selectedGame.pay1stId)
-        );
-        
-        if (gameProducts.length > 0) {
-          setVariations(gameProducts);
-        } else {
-          setVariations([
-            { sku: `${selectedGame.pay1stId}_80`, name: "80 Credits", price: 500 },
-            { sku: `${selectedGame.pay1stId}_420`, name: "420 Credits", price: 2500 },
-            { sku: `${selectedGame.pay1stId}_1000`, name: "1000 Credits", price: 6000 },
-          ]);
-        }
-      } catch (error) {
-        setVariations([
-          { sku: `${selectedGame.pay1stId}_80`, name: "80 Credits", price: 500 },
-          { sku: `${selectedGame.pay1stId}_420`, name: "420 Credits", price: 2500 },
-          { sku: `${selectedGame.pay1stId}_1000`, name: "1000 Credits", price: 6000 },
-        ]);
-      } finally {
-        setLoadingVariations(false);
-      }
-    };
-    fetchBundles();
-  }, [selectedGame]);
-
-  const selectedBundle = useMemo(() => variations.find(v => v.sku === selectedSku), [variations, selectedSku]);
-
-  const handlePurchase = async () => {
-    if (!user || !firestore || !userRef || !selectedGame || !selectedBundle) return;
-    
-    if (!playerId) {
-      toast({ title: "Player ID Required", variant: "destructive" });
-      return;
-    }
-
-    const price = parseFloat(selectedBundle.price);
-    if (profile && (profile.balance || 0) < price) {
-      toast({ title: "Insufficient Balance", variant: "destructive" });
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      const requestId = `GAME-${Date.now()}`;
-      const result = await processPay1stGameTopup({
-        externalReference: requestId,
-        sku: selectedBundle.sku,
-        recipientIdentifier: playerId,
-      });
-
-      if (result.status !== 'SUCCESSFUL' && result.status !== 'PENDING') {
-        throw new Error(result.message || "Gateway Error");
-      }
-
-      setDoc(userRef, { balance: increment(-price) }, { merge: true });
-      addDoc(collection(firestore, "users", user.uid, "transactions"), {
-        type: "games",
-        amount: price,
-        network: selectedGame.name,
-        service: selectedBundle.name,
-        recipient: playerId,
-        status: "success",
-        requestId: requestId,
-        createdAt: new Date().toISOString(),
-      });
-
-      createAINotification(firestore, user.uid, `Successfully credited ${selectedBundle.name} to Player ID ${playerId}`, user.displayName || '');
-      setIsSuccess(true);
-    } catch (error: any) {
-      // Simulation for Dev Mode if keys are missing
-      setDoc(userRef, { balance: increment(-price) }, { merge: true });
-      addDoc(collection(firestore, "users", user.uid, "transactions"), {
-        type: "games",
-        amount: price,
-        network: selectedGame.name,
-        service: selectedBundle.name,
-        recipient: playerId,
-        status: "success",
-        createdAt: new Date().toISOString(),
-      });
-      setIsSuccess(true);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  if (isSuccess) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-8 text-center">
-        <div className="h-24 w-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-8">
-          <CheckCircle2 size={56} className="animate-bounce" />
-        </div>
-        <h1 className="text-3xl font-black mb-3">Top-up Successful!</h1>
-        <p className="text-muted-foreground mb-10 max-w-xs mx-auto">
-          {selectedBundle?.name} sent to Player ID <span className="font-bold text-foreground">{playerId}</span>.
-        </p>
-        <div className="w-full max-w-xs space-y-4">
-          <Button className="w-full rounded-2xl h-14" onClick={() => setIsSuccess(false)}>Buy More</Button>
-          <Link href="/dashboard" className="block"><Button variant="outline" className="w-full rounded-2xl h-14 border-secondary">Dashboard</Button></Link>
-        </div>
-      </div>
-    );
-  }
-
+export default function GameComingSoon() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <header className="p-6 flex items-center gap-4 sticky top-0 bg-background/80 backdrop-blur-md z-10 border-b">
-        <Link href="/dashboard"><Button variant="ghost" size="icon" className="rounded-full"><ArrowLeft size={24} /></Button></Link>
+        <Link href="/dashboard">
+          <Button variant="ghost" size="icon" className="rounded-full">
+            <ArrowLeft size={24} />
+          </Button>
+        </Link>
         <h1 className="text-xl font-black">Pro Gaming</h1>
       </header>
 
-      <main className="px-6 py-8 space-y-6 max-w-xl mx-auto">
-        <div className="space-y-4">
-          <Label className="text-xs font-bold uppercase text-muted-foreground">Select Game</Label>
-          <div className="grid grid-cols-1 gap-3">
-            {gameProviders.map((p) => (
-              <button
-                key={p.pay1stId}
-                onClick={() => setSelectedGame(p)}
-                className={`h-16 rounded-2xl border px-4 transition-all font-bold flex items-center justify-between ${
-                  selectedGame?.pay1stId === p.pay1stId ? "bg-primary/10 border-primary text-primary" : "bg-white border-secondary"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 bg-secondary rounded-xl flex items-center justify-center"><Gamepad2 size={20} /></div>
-                  {p.name}
-                </div>
-                {selectedGame?.pay1stId === p.pay1stId && <CheckCircle2 size={18} />}
-              </button>
-            ))}
+      <main className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto space-y-8">
+        <div className="relative">
+          <div className="h-32 w-32 bg-primary/10 rounded-[2.5rem] flex items-center justify-center text-primary animate-pulse">
+            <Gamepad2 size={64} />
           </div>
-
-          {selectedGame && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase text-muted-foreground">Player ID / UID</Label>
-                <Input placeholder="Enter Player ID" className="h-14 rounded-2xl" value={playerId} onChange={(e) => setPlayerId(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase text-muted-foreground">Package</Label>
-                <Select onValueChange={setSelectedSku} value={selectedSku}>
-                  <SelectTrigger className="h-14 rounded-2xl"><SelectValue placeholder="Choose bundle" /></SelectTrigger>
-                  <SelectContent>{variations.map((v) => <SelectItem key={v.sku} value={v.sku}>{v.name} - ₦{v.price.toLocaleString()}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
+          <div className="absolute -bottom-2 -right-2 h-12 w-12 bg-accent rounded-2xl flex items-center justify-center text-accent-foreground shadow-lg rotate-12">
+            <Timer size={24} />
+          </div>
         </div>
 
-        <Button className="w-full h-16 rounded-3xl text-xl font-black shadow-2xl" onClick={handlePurchase} disabled={isProcessing || !selectedBundle || !playerId}>
-          {isProcessing ? <Loader2 className="animate-spin" /> : "Purchase Credits"}
-        </Button>
+        <div className="space-y-4">
+          <h2 className="text-4xl font-black tracking-tight">Leveling Up!</h2>
+          <p className="text-muted-foreground font-medium leading-relaxed">
+            Our Pro Gaming platform is currently under construction. We're integrating direct global top-ups for CODM, Free Fire, and Bloodstrike.
+          </p>
+        </div>
+
+        <Card className="bg-secondary/30 border-none rounded-[2rem] w-full">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center gap-3 text-primary">
+              <Sparkles size={20} className="shrink-0" />
+              <p className="text-xs font-black uppercase tracking-widest text-left">What to expect</p>
+            </div>
+            <ul className="text-left space-y-3">
+              {[
+                "Instant UID Verification",
+                "Bonus Credits on every top-up",
+                "Support for 50+ Global Games",
+                "AI-Powered Game Recommendations"
+              ].map((item, i) => (
+                <li key={i} className="flex items-center gap-2 text-sm font-bold opacity-80">
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+
+        <div className="w-full space-y-4 pt-4">
+          <Button className="w-full h-16 rounded-3xl text-lg font-black gap-2 shadow-xl shadow-primary/20">
+            <BellRing size={20} /> Notify Me on Launch
+          </Button>
+          <Link href="/dashboard" className="block">
+            <Button variant="outline" className="w-full h-14 rounded-2xl font-bold border-secondary">
+              Back to Dashboard
+            </Button>
+          </Link>
+        </div>
       </main>
     </div>
   );
