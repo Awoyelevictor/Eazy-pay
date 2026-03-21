@@ -71,7 +71,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchStats();
     
-    // Check for the specific user requested
+    // Auto-check for the specific user requested
     if (db) {
       findUserByEmail(db, 'awoyeleemma1@gmail.com').then(found => {
         if (found) setSpecificUserFound(found);
@@ -102,18 +102,15 @@ export default function AdminDashboard() {
     if (!db || !targetUser) return;
     setRepairingSpecific(true);
     try {
-      // Find the user first to get current balance
-      const current = await findUserByEmail(db, targetUser.email);
-      if (current) {
-         // Ask for amount via prompt as an emergency tool
-         const amount = prompt(`Enter amount to ADD to ${targetUser.email}'s wallet:`, "1000");
-         if (amount) {
-            const newBal = (Number(current.balance) || 0) + parseFloat(amount);
-            await adminUpdateUserBalance(db, current.id, newBal, `Emergency Recovery: Refund for funding`);
-            toast({ title: "User Repaired", description: `Added ₦${amount} to ${targetUser.email}` });
-            fetchStats();
-            if (directUser?.email === targetUser.email) setDirectUser({...directUser, balance: newBal});
-         }
+      const amount = prompt(`Enter amount to ADD to ${targetUser.email}'s wallet:`, "1000");
+      if (amount) {
+        const currentBal = Number(targetUser.balance) || 0;
+        const newBal = currentBal + parseFloat(amount);
+        await adminUpdateUserBalance(db, targetUser.id, newBal, `Emergency Recovery: Refund for funding`);
+        toast({ title: "User Repaired", description: `Added ₦${amount} to ${targetUser.email}` });
+        fetchStats();
+        if (directUser?.email === targetUser.email) setDirectUser({...directUser, balance: newBal});
+        if (specificUserFound?.email === targetUser.email) setSpecificUserFound({...specificUserFound, balance: newBal});
       }
     } catch (e: any) {
       toast({ title: "Repair Failed", description: e.message, variant: "destructive" });
@@ -176,15 +173,15 @@ export default function AdminDashboard() {
         </Button>
       </header>
 
-      {/* Emergency Alert for Specific User Request */}
+      {/* Emergency Alert for awoyeleemma1@gmail.com */}
       {specificUserFound && (
-        <Alert className="mb-8 border-primary bg-primary/5 rounded-[2rem] animate-in slide-in-from-top-4">
-          <Zap className="h-5 w-5 text-primary" />
-          <AlertTitle className="font-black">Special Case Detected</AlertTitle>
-          <AlertDescription className="flex items-center justify-between gap-4 mt-2">
-            <span className="text-xs">User <b>{specificUserFound.email}</b> is in the database with balance ₦{specificUserFound.balance}.</span>
-            <Button size="sm" className="rounded-xl font-black text-[10px] uppercase" onClick={() => handleRepairUser(specificUserFound)} disabled={repairingSpecific}>
-              {repairingSpecific ? <Loader2 className="animate-spin" /> : "Repair Balance Now"}
+        <Alert className="mb-8 border-primary bg-primary/5 rounded-[2rem] border-2 shadow-lg animate-in slide-in-from-top-4">
+          <Zap className="h-6 w-6 text-primary" />
+          <AlertTitle className="font-black text-lg">Special Action Required</AlertTitle>
+          <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
+            <span className="text-sm">User <b>{specificUserFound.email}</b> is active. Current Balance: <b>₦{specificUserFound.balance.toLocaleString()}</b></span>
+            <Button size="sm" className="rounded-xl font-black text-xs uppercase px-6" onClick={() => handleRepairUser(specificUserFound)} disabled={repairingSpecific}>
+              {repairingSpecific ? <Loader2 className="animate-spin" /> : "Refund This User Now"}
             </Button>
           </AlertDescription>
         </Alert>
@@ -256,7 +253,7 @@ export default function AdminDashboard() {
                       <ArrowUpDown className="mr-2" size={18} /> Edit Balance
                     </Button>
                     <Button variant="ghost" className="text-primary font-bold hover:bg-primary/10" onClick={() => handleRepairUser(directUser)}>
-                      <Zap className="mr-2" size={18} /> Repair Account
+                      <Zap className="mr-2" size={18} /> Refund Wallet
                     </Button>
                   </div>
                 </div>

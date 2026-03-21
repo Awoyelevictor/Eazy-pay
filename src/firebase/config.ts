@@ -3,7 +3,8 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 /**
- * Production Firebase configuration for Eazy-pay.
+ * 1. FIREBASE CONFIGURATION
+ * Find this in: Firebase Console > Project Settings > General > Your Apps
  */
 const firebaseConfig = {
   apiKey: "AIzaSyDHZ4KTXXGN3w8o8qjNAvI7bKmNVzyqT-U",
@@ -15,12 +16,16 @@ const firebaseConfig = {
   measurementId: "G-31S8D2K21K"
 };
 
-// Paystack Live Keys
+/** 
+ * 2. PAYSTACK CONFIGURATION (Payments & Wallet Funding)
+ * Dashboard: https://dashboard.paystack.com/
+ */
 export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83ace52";
 export const PAYSTACK_SECRET_KEY = "sk_live_03ae68bc0e27e4b595e18cf9960ce75c22143e21";
 
 /** 
- * VTPASS API CONFIGURATION (Airtime, Data, Utilities)
+ * 3. VTPASS CONFIGURATION (Airtime, Data, Electricity, Cable)
+ * Dashboard: https://www.vtpass.com/rest-api
  */
 export const VTU_CONFIG = {
   API_KEY: "384e1cf92f291f8bf76dc271e7b9f7fe",
@@ -30,21 +35,19 @@ export const VTU_CONFIG = {
 };
 
 /**
- * PAY1ST / CARRY1ST GATEWAY CONFIGURATION (Specifically for Gaming)
+ * 4. OTHER PROVIDERS (Gaming & Fallbacks)
  */
 export const PAY1ST_CONFIG = {
-  API_KEY: "PAY1ST_API_KEY_HERE",
+  API_KEY: "YOUR_CARRY1ST_API_KEY_HERE",
   BASE_URL: "https://api.carry1st.com/v1",
 };
 
-/**
- * SHAGO PAYMENTS CONFIGURATION (Fallback)
- */
 export const SHAGO_CONFIG = {
-  HASH_KEY: "SHAGO_HASH_KEY_HERE", 
+  HASH_KEY: "YOUR_SHAGO_HASH_KEY_HERE", 
   BASE_URL: "https://api.shagopayments.com/public/api/v2",
 };
 
+// Initialize Firebase
 const app = getApps().length > 0 
   ? getApp() 
   : initializeApp(firebaseConfig);
