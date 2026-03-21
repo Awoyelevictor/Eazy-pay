@@ -18,14 +18,14 @@ const firebaseConfig = {
 
 /** 
  * 2. PAYSTACK CONFIGURATION (Payments & Wallet Funding)
- * Find this in: Paystack Dashboard > Settings > API Keys & Webhooks
+ * Dashboard: https://dashboard.paystack.com/
  */
 export const PAYSTACK_PUBLIC_KEY = "pk_live_92bf8334a23001695120e2a1eb135c37b83ace52";
 export const PAYSTACK_SECRET_KEY = "sk_live_03ae68bc0e27e4b595e18cf9960ce75c22143e21";
 
 /** 
  * 3. VTPASS CONFIGURATION (Airtime, Data, Electricity, Cable)
- * Find this in: VTpass Dashboard > My Account > API Integration
+ * Dashboard: https://www.vtpass.com/rest-api
  */
 export const VTU_CONFIG = {
   API_KEY: "384e1cf92f291f8bf76dc271e7b9f7fe",
