@@ -8,9 +8,12 @@ import { SHAGO_CONFIG } from "@/firebase/config";
  * This is used specifically for gaming top-ups as requested.
  */
 async function shagoFetch(endpoint: string, body: any) {
+  // Use direct process.env to prevent Next.js from stripping keys on client-to-server calls
+  const hashKey = process.env.SHAGO_HASH_KEY || SHAGO_CONFIG.HASH_KEY;
+  
   const headers = {
     'Content-Type': 'application/json',
-    'hashKey': SHAGO_CONFIG.HASH_KEY,
+    'hashKey': hashKey as string,
   };
 
   const url = `${SHAGO_CONFIG.BASE_URL}${endpoint}`;
@@ -66,5 +69,47 @@ export async function getShagoVariations(category: string) {
   return await shagoFetch('/getServiceVariations', {
     serviceCode: 'GAME',
     productCode: category,
+  });
+}
+
+/**
+ * Process airtime purchase via Shago.
+ */
+export async function processShagoAirtime(payload: {
+  network: string; // MTN, GLO, AIRTEL, 9MOBILE
+  amount: number;
+  phone: string;
+}) {
+  return await shagoFetch('/buy_airtime', {
+    serviceCode: payload.network.toUpperCase(),
+    phone: payload.phone,
+    amount: payload.amount,
+  });
+}
+
+/**
+ * Process data purchase via Shago.
+ */
+export async function processShagoData(payload: {
+  network: string;
+  amount: number;
+  phone: string;
+  bundleCode: string; // Obtained from getShagoVariations
+}) {
+  return await shagoFetch('/buy_data', {
+    serviceCode: payload.network.toUpperCase(),
+    phone: payload.phone,
+    amount: payload.amount,
+    bundle_code: payload.bundleCode,
+  });
+}
+
+/**
+ * Get data bundles for a network via Shago.
+ */
+export async function getShagoDataBundles(network: string) {
+  return await shagoFetch('/getServiceVariations', {
+    serviceCode: network.toUpperCase(),
+    type: 'DATA', // Shago specific flag to differentiate from other variations
   });
 }

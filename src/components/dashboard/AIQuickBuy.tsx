@@ -12,15 +12,23 @@ import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { processSMEPlugAirtime, processSMEPlugData, getSMEPlugNetworkId } from "@/app/actions/smeplug";
 
 // Price mapping for AI consistency
 const PRICE_MAP: Record<string, number> = {
-  '1GB': 300,
-  '2GB': 600,
-  '5GB': 1500,
-  '10GB': 2900,
-  '20GB': 5500,
-  '40GB': 10000,
+  '1GB': 1000,
+  '2GB': 2000,
+  '5GB': 3000,
+  '10GB': 5000,
+  '20GB': 10000,
+};
+
+// Common SMEPlug Data Plan IDs (Standard MTN SME IDs - these vary, so we suggest manual for better accuracy)
+const SMEPLUG_DATA_PLANS: Record<string, number> = {
+  'mtn-1000': 11, // Example ID for MTN 1.5GB
+  'glo-1000': 21,
+  'airtel-1000': 31,
+  '9mobile-1000': 41,
 };
 
 export function AIQuickBuy() {
@@ -62,14 +70,13 @@ export function AIQuickBuy() {
   const handleExecutePurchase = async () => {
     if (!user || !firestore || !userRef || !parsedResult || !profile) return;
 
-    // Calculate cost based on type and amount
+    // Determine Cost and standard Label
     let cost = parsedResult.amount;
     let serviceLabel = parsedResult.serviceType === 'airtime' ? 'Airtime' : `${parsedResult.amount}GB Data`;
 
     if (parsedResult.serviceType === 'data') {
-      // If the AI output is a small number (like 1, 2, 5), it means GB
       const key = `${parsedResult.amount}GB`;
-      cost = PRICE_MAP[key] || (parsedResult.amount > 100 ? parsedResult.amount : 500);
+      cost = PRICE_MAP[key] || (parsedResult.amount >= 1000 ? parsedResult.amount : 1000);
     }
     
     if (profile.balance < cost) {
@@ -82,50 +89,74 @@ export function AIQuickBuy() {
       return;
     }
 
+    const networkName = parsedResult.networkProvider !== 'unknown' ? parsedResult.networkProvider.toUpperCase() : "MTN";
+    const recipientPhone = parsedResult.phoneNumber || user.phoneNumber;
+
+    if (!recipientPhone) {
+      toast({ title: "Phone Required", description: "Please include a phone number in your prompt next time.", variant: "destructive" });
+      setParsedResult(null);
+      return;
+    }
+
     setIsExecuting(true);
 
-    const transactionData = {
-      type: parsedResult.serviceType,
-      amount: cost,
-      network: parsedResult.networkProvider !== 'unknown' ? parsedResult.networkProvider : "Default",
-      recipient: parsedResult.phoneNumber || user.phoneNumber || "My Registered Number",
-      service: serviceLabel,
-      status: "success",
-      createdAt: new Date().toISOString(),
-      aiGenerated: true
-    };
+    try {
+      let result;
 
-    // 1. Deduct balance
-    updateDoc(userRef, {
-      balance: increment(-cost)
-    }).catch(async () => {
-      errorEmitter.emit('permission-error', new FirestorePermissionError({
-        path: userRef.path,
-        operation: 'update',
-        requestResourceData: { balance: increment(-cost) }
-      }));
-    });
-
-    // 2. Add transaction
-    const transactionsRef = collection(firestore, "users", user.uid, "transactions");
-    addDoc(transactionsRef, transactionData)
-      .then(() => {
-        toast({
-          title: "Purchase Successful!",
-          description: `Successfully processed: ${serviceLabel}`,
+      if (parsedResult.serviceType === 'airtime') {
+        result = await processSMEPlugAirtime({
+          network_id: getSMEPlugNetworkId(networkName),
+          amount: cost,
+          phone_number: recipientPhone
         });
-        setParsedResult(null);
-      })
-      .catch(async () => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: transactionsRef.path,
-          operation: 'create',
-          requestResourceData: transactionData
-        }));
-      })
-      .finally(() => {
-        setIsExecuting(false);
+      } else {
+        const planId = SMEPLUG_DATA_PLANS[`${networkName.toLowerCase()}-${cost}`];
+        if (!planId) {
+          throw new Error(`That specific data plan via AI box requires manual selection on the Data page for 100% accuracy.`);
+        }
+        result = await processSMEPlugData({
+          network_id: getSMEPlugNetworkId(networkName),
+          plan_id: planId,
+          phone_number: recipientPhone,
+          customer_reference: `SME-AI-${Date.now()}`
+        });
+      }
+
+      if (!result.status || result.status === 'fail' || result.status === 'failed') {
+        throw new Error(result.message || "SMEPlug gateway rejected the purchase.");
+      }
+
+      // 1. Deduct wallet
+      await updateDoc(userRef, { balance: increment(-cost) });
+
+      // 2. Log real transaction
+      const transactionsRef = collection(firestore, "users", user.uid, "transactions");
+      await addDoc(transactionsRef, {
+        type: parsedResult.serviceType,
+        amount: cost,
+        network: networkName,
+        recipient: recipientPhone,
+        service: serviceLabel,
+        status: "success",
+        requestId: result.reference || result.id || `SME-AI-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        aiGenerated: true,
+        provider: "SMEPlug"
       });
+
+      toast({
+        title: "AI Purchase Activated! ⚡",
+        description: `Successfully executed: ${networkName} ${serviceLabel} to ${recipientPhone} via SMEPlug`,
+      });
+      
+      setParsedResult(null);
+
+    } catch (error: any) {
+      console.error("AI Purchase Error:", error);
+      toast({ title: "Execution Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   if (parsedResult) {

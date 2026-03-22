@@ -11,45 +11,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
-import { processPayment } from "@/app/actions/vtpass";
+import { processSMEPlugData, getSMEPlugDataPlans, getSMEPlugNetworkId } from "@/app/actions/smeplug";
 import { createAINotification } from "@/services/notification-service";
+import { useEffect } from "react";
 
 const networks = [
-  { name: "MTN", color: "bg-yellow-400", logo: "M", vtuId: "mtn-data" },
-  { name: "Glo", color: "bg-green-600", logo: "G", vtuId: "glo-data" },
-  { name: "Airtel", color: "bg-red-600", logo: "A", vtuId: "airtel-data" },
-  { name: "9mobile", color: "bg-emerald-900", logo: "9", vtuId: "etisalat-data" },
+  { name: "MTN", color: "bg-yellow-400", logo: "M" },
+  { name: "Glo", color: "bg-green-600", logo: "G" },
+  { name: "Airtel", color: "bg-red-600", logo: "A" },
+  { name: "9mobile", color: "bg-emerald-900", logo: "9" },
 ];
-
-const networkBundles: Record<string, any[]> = {
-  "MTN": [
-    { variation: "mtn-100mb-1000", name: "1.5GB / 30 Days", amount: 1000 },
-    { variation: "mtn-500mb-2000", name: "4.5GB / 30 Days", amount: 2000 },
-    { variation: "mtn-data-3000", name: "8GB / 30 Days", amount: 3000 },
-    { variation: "mtn-40gb-10000", name: "40GB / 30 Days", amount: 10000 },
-  ],
-  "Airtel": [
-    { variation: "airt-1000", name: "1.5GB / 30 Days", amount: 1000 },
-    { variation: "airt-2000", name: "4.5GB / 30 Days", amount: 2000 },
-    { variation: "airt-5000", name: "15GB / 30 Days", amount: 5000 },
-  ],
-  "Glo": [
-    { variation: "glo1000", name: "2.5GB / 30 Days", amount: 1000 },
-    { variation: "glo2000", name: "5.8GB / 30 Days", amount: 2000 },
-    { variation: "glo3000", name: "10GB / 30 Days", amount: 3000 },
-  ],
-  "9mobile": [
-    { variation: "eti-1000", name: "1.5GB / 30 Days", amount: 1000 },
-    { variation: "eti-2000", name: "4.5GB / 30 Days", amount: 2000 },
-  ]
-};
 
 export default function DataPurchase() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [selectedNetwork, setSelectedNetwork] = useState<typeof networks[0] | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [allPlans, setAllPlans] = useState<any[]>([]); // SMEPlug returns all plans at once
   const [selectedBundle, setSelectedBundle] = useState<any | null>(null);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const { toast } = useToast();
@@ -61,26 +41,32 @@ export default function DataPurchase() {
 
   const { data: profile } = useDoc(userRef);
 
+  // Fetch ALL plans from SMEPlug on mount
+  useEffect(() => {
+    setIsLoadingPlans(true);
+    getSMEPlugDataPlans()
+      .then(res => {
+        if (res.status === 'success' || res.status === true) {
+          // SMEPlug returns a list of data plans
+          setAllPlans(res.data || []);
+        }
+      })
+      .catch(err => console.error("Plan Fetch Error:", err))
+      .finally(() => setIsLoadingPlans(false));
+  }, []);
+
   const availableBundles = useMemo(() => {
     if (!selectedNetwork) return [];
-    return networkBundles[selectedNetwork.name] || [];
-  }, [selectedNetwork]);
-
-  const generateRequestId = () => {
-    const now = new Date();
-    const dateStr = now.getFullYear() + 
-                    (now.getMonth() + 1).toString().padStart(2, "0") + 
-                    now.getDate().toString().padStart(2, "0") + 
-                    now.getHours().toString().padStart(2, "0") + 
-                    now.getMinutes().toString().padStart(2, "0");
-    const randomDigits = Math.floor(1000000 + Math.random() * 9000000); 
-    return `${dateStr}${randomDigits}`;
-  };
+    const netId = getSMEPlugNetworkId(selectedNetwork.name);
+    // Filter the big plan list by the selected network
+    return allPlans.filter(p => Number(p.network_id) === netId || p.network === selectedNetwork.name);
+  }, [allPlans, selectedNetwork]);
 
   const handlePurchase = async () => {
     if (!user || !firestore || !userRef || !selectedBundle || !selectedNetwork) return;
     
-    if (profile && profile.balance < selectedBundle.amount) {
+    const cost = parseFloat(selectedBundle.price || selectedBundle.amount);
+    if (profile && profile.balance < cost) {
       toast({ title: "Insufficient Balance", variant: "destructive" });
       return;
     }
@@ -88,42 +74,40 @@ export default function DataPurchase() {
     setIsProcessing(true);
 
     try {
-      const requestId = generateRequestId();
-      const result = await processPayment({
-        request_id: requestId,
-        serviceID: selectedNetwork.vtuId,
-        billersCode: phoneNumber,
-        variation_code: selectedBundle.variation,
-        amount: selectedBundle.amount,
-        phone: phoneNumber
+      const result = await processSMEPlugData({
+        network_id: getSMEPlugNetworkId(selectedNetwork.name),
+        plan_id: selectedBundle.plan_id || selectedBundle.id,
+        phone_number: phoneNumber,
+        customer_reference: `SME-DT-${Date.now()}`
       });
 
-      if (result.code !== '000') {
-        throw new Error(result.response_description || "Subscription failed");
+      if (!result.status || result.status === 'fail' || result.status === 'failed') {
+        throw new Error(result.message || "Subscription failed at SMEPlug gateway");
       }
 
       // 1. Deduct balance
-      await updateDoc(userRef, { balance: increment(-selectedBundle.amount) });
+      await updateDoc(userRef, { balance: increment(-cost) });
 
       // 2. Log transaction
       const transactionData = {
         type: "data",
-        amount: selectedBundle.amount,
+        amount: cost,
         network: selectedNetwork.name,
         recipient: phoneNumber,
-        service: selectedBundle.name,
+        service: selectedBundle.name || selectedBundle.allowance,
         status: "success",
-        requestId: requestId,
+        requestId: result.reference || result.id || `SME-DT-${Date.now()}`,
         createdAt: new Date().toISOString(),
+        provider: "SMEPlug"
       };
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
       
-      // 3. AI Notification (Awaited)
+      // 3. AI Notification
       await createAINotification(
         firestore,
         user.uid,
-        `Successfully subscribed ${selectedBundle.name} for ${phoneNumber} on ${selectedNetwork.name}`,
+        `Successfully subscribed ${selectedBundle.name || selectedBundle.allowance} for ${phoneNumber} via SMEPlug`,
         user.displayName || ''
       );
 
@@ -194,18 +178,24 @@ export default function DataPurchase() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-black uppercase text-muted-foreground">Select Bundle</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-black uppercase text-muted-foreground">Select Bundle</Label>
+                {isLoadingPlans && <Loader2 className="animate-spin h-4 w-4 text-primary" />}
+              </div>
               <div className="grid gap-3">
-                {availableBundles.map((b) => (
+                {availableBundles.length === 0 && !isLoadingPlans && (
+                   <p className="text-center py-8 text-sm text-slate-400 italic">No bundles available at the moment.</p>
+                )}
+                {availableBundles.map((b, i) => (
                   <button
-                    key={b.variation}
+                    key={i + (b.id || b.plan_id)}
                     onClick={() => setSelectedBundle(b)}
                     className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all ${
-                      selectedBundle?.variation === b.variation ? "bg-primary/5 border-primary" : "bg-white border-secondary"
+                      (selectedBundle?.id === b.id || selectedBundle?.plan_id === b.plan_id) ? "bg-primary/5 border-primary" : "bg-white border-secondary"
                     }`}
                   >
-                    <span className="font-bold text-sm">{b.name}</span>
-                    <span className="font-black text-primary">₦{b.amount}</span>
+                    <span className="font-bold text-sm">{b.name || b.allowance}</span>
+                    <span className="font-black text-primary">₦{b.price || b.amount}</span>
                   </button>
                 ))}
               </div>

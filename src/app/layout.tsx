@@ -15,18 +15,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
         {/* Paystack Inline Script - Placed in Head for maximum reliability */}
         <Script 
-          src="https://js.paystack.co/v1/inline.js" 
+          src="https://js.paystack.co/v2/inline.js" 
           strategy="beforeInteractive" 
         />
       </head>
-      <body className="font-body antialiased bg-background">
+      <body className="font-body antialiased bg-background" suppressHydrationWarning>
         <FirebaseClientProvider>
           {children}
           <Toaster />

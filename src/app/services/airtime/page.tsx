@@ -11,14 +11,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
-import { processPayment } from "@/app/actions/vtpass";
+import { processSMEPlugAirtime, getSMEPlugNetworkId } from "@/app/actions/smeplug";
 import { createAINotification } from "@/services/notification-service";
 
 const networks = [
-  { name: "MTN", color: "bg-yellow-400", logo: "M", vtuId: "mtn" },
-  { name: "Glo", color: "bg-green-500", logo: "G", vtuId: "glo" },
-  { name: "Airtel", color: "bg-red-500", logo: "A", vtuId: "airtel" },
-  { name: "9mobile", color: "bg-emerald-800", logo: "9", vtuId: "etisalat" },
+  { name: "MTN", color: "bg-yellow-400", logo: "M" },
+  { name: "Glo", color: "bg-green-500", logo: "G" },
+  { name: "Airtel", color: "bg-red-500", logo: "A" },
+  { name: "9mobile", color: "bg-emerald-800", logo: "9" },
 ];
 
 export default function AirtimePurchase() {
@@ -37,17 +37,6 @@ export default function AirtimePurchase() {
   }, [firestore, user]);
 
   const { data: profile } = useDoc(userRef);
-
-  const generateRequestId = () => {
-    const now = new Date();
-    const dateStr = now.getFullYear() + 
-                    (now.getMonth() + 1).toString().padStart(2, "0") + 
-                    now.getDate().toString().padStart(2, "0") + 
-                    now.getHours().toString().padStart(2, "0") + 
-                    now.getMinutes().toString().padStart(2, "0");
-    const randomDigits = Math.floor(1000000 + Math.random() * 9000000); // 7 random digits
-    return `${dateStr}${randomDigits}`;
-  };
 
   const handlePurchase = async () => {
     if (!user || !firestore || !userRef) return;
@@ -71,17 +60,15 @@ export default function AirtimePurchase() {
     setIsProcessing(true);
 
     try {
-      const requestId = generateRequestId();
-      
-      const result = await processPayment({
-        request_id: requestId,
-        serviceID: selectedNetwork.vtuId,
+      const result = await processSMEPlugAirtime({
+        network_id: getSMEPlugNetworkId(selectedNetwork.name),
         amount: purchaseAmount,
-        phone: phoneNumber
+        phone_number: phoneNumber
       });
 
-      if (result.code !== '000') {
-        throw new Error(result.response_description || "Transaction failed");
+      // SMEPlug success status is usually a boolean true or "success" string
+      if (!result.status || result.status === 'fail' || result.status === 'failed') {
+        throw new Error(result.message || "Transaction failed at SMEPlug gateway");
       }
 
       // 1. Deduct balance
@@ -94,17 +81,18 @@ export default function AirtimePurchase() {
         network: selectedNetwork.name,
         recipient: phoneNumber,
         status: "success",
-        requestId: requestId,
+        requestId: result.reference || result.id || `SME-${Date.now()}`,
         createdAt: new Date().toISOString(),
+        provider: "SMEPlug"
       };
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
       
-      // 3. Notify user with AI message (Awaited for reliability)
+      // 3. AI Notification
       await createAINotification(
         firestore, 
         user.uid, 
-        `Successfully purchased NGN ${purchaseAmount} ${selectedNetwork.name} airtime for ${phoneNumber}`,
+        `Successfully purchased ₦${purchaseAmount} ${selectedNetwork.name} airtime for ${phoneNumber} via SMEPlug`,
         user.displayName || ''
       );
 

@@ -6,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getPaystackBanks, processPaystackWithdrawal } from "@/app/actions/paystack";
 import { useUser, useDoc, useFirestore } from "@/firebase";
 import { doc, setDoc, increment, collection, addDoc, onSnapshot } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
@@ -25,13 +27,19 @@ export function WalletCard() {
   const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
   const { toast } = useToast();
 
-  const [withdrawData, setWithdrawData] = useState({ amount: "", bankName: "", accountNumber: "", pin: "" });
+  const [withdrawData, setWithdrawData] = useState({ amount: "", bankCode: "", accountNumber: "", pin: "" });
+  const [banks, setBanks] = useState<{name: string, code: string}[]>([]);
 
   const userRef = useMemo(() => (firestore && user) ? doc(firestore, "users", user.uid) : null, [firestore, user]);
   
   // Local state for the profile to ensure real-time reactive updates
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // Load Paystack banks natively on component mount
+  useEffect(() => {
+    getPaystackBanks().then(setBanks).catch(e => console.error("Could not load banks:", e));
+  }, []);
 
   // Use a direct onSnapshot for maximum reliability and persistence visibility
   useEffect(() => {
@@ -108,32 +116,46 @@ export function WalletCard() {
   const handleWithdraw = async () => {
     if (!userRef || !profile) return;
     const amount = parseFloat(withdrawData.amount);
-    if (isNaN(amount) || amount > (profile.balance || 0)) {
-      toast({ title: "Invalid Balance", variant: "destructive" });
+    
+    if (isNaN(amount) || amount > (profile.balance || 0) || amount < 100) {
+      toast({ title: "Invalid Balance", description: "Insufficient funds or below ₦100 limit.", variant: "destructive" });
       return;
     }
     if (withdrawData.pin !== profile.transactionPin) {
       toast({ title: "Incorrect PIN", variant: "destructive" });
       return;
     }
+    if (!withdrawData.bankCode || withdrawData.accountNumber.length < 10) {
+      toast({ title: "Invalid Details", description: "Ensure bank is selected and 10 digit NUBAN is entered.", variant: "destructive" });
+      return;
+    }
 
     setIsWithdrawing(true);
     try {
+      // 1. Call Secure Paystack Servers to Automatically Send Money 
+      await processPaystackWithdrawal({
+        amount,
+        bankCode: withdrawData.bankCode,
+        accountNumber: withdrawData.accountNumber,
+        reason: `Eazy-pay Withdrawal for ${user.email}`
+      });
+
+      // 2. ONLY if Paystack initialized it successfully, deduct their wallet balance
       await setDoc(userRef, { balance: increment(-amount) }, { merge: true });
       await addDoc(collection(firestore!, "users", user.uid, "transactions"), {
         type: "withdrawal",
         amount: amount,
-        service: "Wallet Withdrawal",
-        status: "pending",
+        service: "Direct Transfer",
+        status: "success",
         createdAt: new Date().toISOString(),
-        bankDetails: { bankName: withdrawData.bankName, accountNumber: withdrawData.accountNumber }
+        bankDetails: { bankCode: withdrawData.bankCode, accountNumber: withdrawData.accountNumber }
       });
-      createAINotification(firestore!, user.uid, `Withdrawal of NGN ${amount.toLocaleString()} is processing.`, user.displayName || '');
-      toast({ title: "Transfer Initiated" });
+      createAINotification(firestore!, user.uid, `You instantly withdrew NGN ${amount.toLocaleString()} directly to your bank account.`, user.displayName || '');
+      toast({ title: "Money Sent!", description: "Check your local bank account alert shortly!" });
       setShowWithdrawDialog(false);
-      setWithdrawData({ amount: "", bankName: "", accountNumber: "", pin: "" });
-    } catch (error) {
-      toast({ title: "Transfer Error", variant: "destructive" });
+      setWithdrawData({ amount: "", bankCode: "", accountNumber: "", pin: "" });
+    } catch (error: any) {
+      toast({ title: "Transfer Rejected", description: error.message || "Paystack declined the transaction details.", variant: "destructive" });
     } finally {
       setIsWithdrawing(false);
     }
@@ -179,8 +201,17 @@ export function WalletCard() {
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label>Bank Details</Label>
-                  <Input placeholder="Bank Name (e.g. GTBank)" value={withdrawData.bankName} onChange={(e) => setWithdrawData({...withdrawData, bankName: e.target.value})} className="h-12 rounded-xl" />
-                  <Input placeholder="Account Number" maxLength={10} value={withdrawData.accountNumber} onChange={(e) => setWithdrawData({...withdrawData, accountNumber: e.target.value})} className="h-12 rounded-xl" />
+                  <Select value={withdrawData.bankCode} onValueChange={(val) => setWithdrawData({...withdrawData, bankCode: val})}>
+                    <SelectTrigger className="h-12 rounded-xl border-none bg-slate-100 font-bold dark:bg-slate-800">
+                      <SelectValue placeholder={banks.length > 0 ? "Select Destination Bank" : "Loading Banks..."} />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      {banks.map((b, i) => (
+                        <SelectItem key={i + b.code} value={b.code}>{b.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input placeholder="10 Digit Account Number" maxLength={10} value={withdrawData.accountNumber} onChange={(e) => setWithdrawData({...withdrawData, accountNumber: e.target.value})} className="h-12 rounded-xl text-lg font-black tracking-widest" />
                 </div>
                 <div className="space-y-2">
                   <Label>Transaction Details</Label>
