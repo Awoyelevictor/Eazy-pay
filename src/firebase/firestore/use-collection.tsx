@@ -11,10 +11,12 @@ export function useCollection(query: Query | null | undefined) {
 
   useEffect(() => {
     if (!query) {
+      setData([]);
       setLoading(false);
       return;
     }
 
+    setLoading(true);
     const unsubscribe = onSnapshot(
       query,
       (snapshot) => {
@@ -24,6 +26,7 @@ export function useCollection(query: Query | null | undefined) {
       },
       (err) => {
         setError(err);
+        setData([]);
         setLoading(false);
       }
     );

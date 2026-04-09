@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   BarChart3, 
   Users, 
@@ -23,10 +23,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { useFirestore, useUser } from '@/firebase';
-import { getGlobalStats, adminUpdateUserBalance, broadcastGlobalNotification, findUserByEmail } from '@/services/admin-service';
+import { useFirestore, useUser, useCollection } from '@/firebase';
+import { collection, query, limit } from 'firebase/firestore';
+import { getGlobalStats, adminUpdateUserBalance, broadcastGlobalNotification, findUserByEmail, getAccountingMetrics } from '@/services/admin-service';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { generateAdminMessage, fixPaymentIssue, getAnalytics } from '@/app/actions/admin-ai';
 
 export default function AdminDashboard() {
   const { user } = useUser();
@@ -53,6 +55,31 @@ export default function AdminDashboard() {
   const [broadcastMsg, setBroadcastMsg] = useState('');
   const [broadcasting, setBroadcasting] = useState(false);
 
+  // AI Features State
+  const [aiAnalytics, setAiAnalytics] = useState<any>(null);
+  const [messageReason, setMessageReason] = useState('');
+  const [generatedMessage, setGeneratedMessage] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [messageType, setMessageType] = useState<'all' | 'specific'>('all');
+  const [targetUserEmail, setTargetUserEmail] = useState('');
+  const [paymentIssues, setPaymentIssues] = useState<any[]>([]);
+  const [isFixing, setIsFixing] = useState(false);
+  const [autoFixLog, setAutoFixLog] = useState<any[]>([]);
+
+  // Accounting Metrics State
+  const [accounting, setAccounting] = useState<any>(null);
+  const [loadingAccounting, setLoadingAccounting] = useState(false);
+
+  // Fetch users for AI features - use useCallback to stabilize query creation
+  const buildUsersQuery = useCallback(() => {
+    if (!db) return null;
+    return query(collection(db, 'users'), limit(1000));
+  }, [db]);
+  
+  const usersQuery = useMemo(() => buildUsersQuery(), [buildUsersQuery]);
+  const { data: allUsers } = useCollection(usersQuery);
+
   const fetchStats = async () => {
     if (!db) return;
     setLoading(true);
@@ -68,8 +95,22 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchAccounting = async () => {
+    if (!db) return;
+    setLoadingAccounting(true);
+    try {
+      const data = await getAccountingMetrics(db);
+      setAccounting(data);
+    } catch (e: any) {
+      console.error("Accounting Metrics Error:", e);
+    } finally {
+      setLoadingAccounting(false);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
+    fetchAccounting();
     
     // Auto-check for the specific user requested
     if (db) {
@@ -77,7 +118,52 @@ export default function AdminDashboard() {
         if (found) setSpecificUserFound(found);
       });
     }
+
+    // Fetch AI Analytics
+    const fetchAiAnalytics = async () => {
+      try {
+        const data = await getAnalytics();
+        setAiAnalytics(data);
+      } catch (error) {
+        console.error('Analytics fetch error:', error);
+      }
+    };
+    fetchAiAnalytics();
+    const analyticsInterval = setInterval(fetchAiAnalytics, 30000); // Refresh every 30 seconds
+    
+    return () => clearInterval(analyticsInterval);
   }, [db]);
+
+  // Auto-detect payment issues
+  useEffect(() => {
+    const checkPaymentIssues = async () => {
+      if (!db || !allUsers?.length) return;
+
+      const issues: any[] = [];
+      for (const userDoc of allUsers) {
+        const userData = userDoc;
+        if (userData?.lastFailedTransaction) {
+          const failedTime = userData.lastFailedTransaction.seconds 
+            ? new Date(userData.lastFailedTransaction.seconds * 1000)
+            : new Date(userData.lastFailedTransaction);
+          const hoursSince = (Date.now() - failedTime.getTime()) / (1000 * 60 * 60);
+          
+          if (hoursSince < 24) {
+            issues.push({
+              userId: userData.id,
+              userName: userData.displayName || userData.email,
+              issue: userData.lastFailedTransactionError,
+              timestamp: failedTime,
+              amount: userData.lastFailedTransactionAmount
+            });
+          }
+        }
+      }
+      setPaymentIssues(issues);
+    };
+
+    checkPaymentIssues();
+  }, [allUsers, db]);
 
   const handleDirectSearch = async () => {
     if (!db || !directEmail) return;
@@ -151,6 +237,87 @@ export default function AdminDashboard() {
     }
   };
 
+  // AI Handler: Generate Message with Gemini
+  const handleGenerateMessage = async () => {
+    if (!messageReason) return;
+    setIsGenerating(true);
+    try {
+      const message = await generateAdminMessage(messageReason, messageType);
+      setGeneratedMessage(message);
+    } catch (error) {
+      toast({ title: "Generation Failed", description: "Could not generate message", variant: "destructive" });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // AI Handler: Send AI-Generated Message
+  const handleSendAiMessage = async () => {
+    if (!generatedMessage || !db) return;
+    setIsSending(true);
+    try {
+      if (messageType === 'all') {
+        await broadcastGlobalNotification(db, generatedMessage, 'AI Assistant');
+      } else if (messageType === 'specific' && targetUserEmail) {
+        const targetUser = await findUserByEmail(db, targetUserEmail);
+        if (targetUser) {
+          await broadcastGlobalNotification(db, generatedMessage, 'AI Assistant');
+        } else {
+          toast({ title: "User Not Found", variant: "destructive" });
+        }
+      }
+      toast({ title: "Message Sent Successfully" });
+      setGeneratedMessage('');
+      setMessageReason('');
+      setTargetUserEmail('');
+    } catch (error) {
+      toast({ title: "Send Failed", variant: "destructive" });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // AI Handler: Auto-Fix Payment Issue
+  const handleAutoFixPayment = async (issue: any) => {
+    if (!db) return;
+    setIsFixing(true);
+    try {
+      const result = await fixPaymentIssue(issue.userId);
+      setAutoFixLog([...autoFixLog, { userId: issue.userId, result, timestamp: new Date() }]);
+      toast({ title: "Payment Fixed", description: result.description });
+      // Refresh payment issues
+      const checkPaymentIssues = async () => {
+        if (!allUsers?.length) return;
+        const issues: any[] = [];
+        for (const userDoc of allUsers) {
+          const userData = userDoc;
+          if (userData?.lastFailedTransaction) {
+            const failedTime = userData.lastFailedTransaction.seconds 
+              ? new Date(userData.lastFailedTransaction.seconds * 1000)
+              : new Date(userData.lastFailedTransaction);
+            const hoursSince = (Date.now() - failedTime.getTime()) / (1000 * 60 * 60);
+            
+            if (hoursSince < 24) {
+              issues.push({
+                userId: userData.id,
+                userName: userData.displayName || userData.email,
+                issue: userData.lastFailedTransactionError,
+                timestamp: failedTime,
+                amount: userData.lastFailedTransactionAmount
+              });
+            }
+          }
+        }
+        setPaymentIssues(issues);
+      };
+      checkPaymentIssues();
+    } catch (error) {
+      toast({ title: "Auto-Fix Failed", variant: "destructive" });
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
   if (loading) return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-50">
       <Loader2 className="animate-spin text-primary h-12 w-12" />
@@ -213,7 +380,10 @@ export default function AdminDashboard() {
         <TabsList className="bg-white p-1 rounded-2xl shadow-sm border h-14">
           <TabsTrigger value="search" className="rounded-xl h-12 px-6 font-bold">Direct Lookup</TabsTrigger>
           <TabsTrigger value="directory" className="rounded-xl h-12 px-6 font-bold">Full Directory</TabsTrigger>
+          <TabsTrigger value="ai-assistant" className="rounded-xl h-12 px-6 font-bold">🤖 AI Assistant</TabsTrigger>
+          <TabsTrigger value="payment-issues" className="rounded-xl h-12 px-6 font-bold">⚠️ Payment Issues</TabsTrigger>
           <TabsTrigger value="broadcast" className="rounded-xl h-12 px-6 font-bold">Global Message</TabsTrigger>
+          <TabsTrigger value="accounting" className="rounded-xl h-12 px-6 font-bold">💰 Accounting</TabsTrigger>
         </TabsList>
 
         <TabsContent value="search">
@@ -323,6 +493,163 @@ export default function AdminDashboard() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="ai-assistant">
+          <Card className="rounded-[2.5rem] border-none shadow-sm overflow-hidden">
+            <CardHeader>
+              <CardTitle className="text-xl font-black">🤖 AI Message Generator</CardTitle>
+              <CardDescription>AI powered by Gemini - Generates professional messages automatically</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Analytics Summary */}
+              {aiAnalytics && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-blue-50 rounded-xl">
+                  <div>
+                    <p className="text-xs font-black text-slate-500">Total Users</p>
+                    <p className="text-lg font-black text-blue-600">{aiAnalytics.totalUsers}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-500">Total Revenue</p>
+                    <p className="text-lg font-black text-green-600">₦{aiAnalytics.totalRevenue?.toLocaleString() || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-500">Transactions</p>
+                    <p className="text-lg font-black text-purple-600">{aiAnalytics.totalTransactions}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-500">Success Rate</p>
+                    <p className="text-lg font-black text-emerald-600">{aiAnalytics.successRate}%</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Message Type Selection */}
+              <div className="space-y-2">
+                <p className="text-xs font-black uppercase text-slate-500">Message Type</p>
+                <div className="flex gap-2">
+                  <Button 
+                    variant={messageType === 'all' ? 'default' : 'outline'}
+                    className="rounded-xl font-bold"
+                    onClick={() => { setMessageType('all'); setTargetUserEmail(''); }}
+                  >
+                    📢 Broadcast All
+                  </Button>
+                  <Button 
+                    variant={messageType === 'specific' ? 'default' : 'outline'}
+                    className="rounded-xl font-bold"
+                    onClick={() => setMessageType('specific')}
+                  >
+                    👤 Specific User
+                  </Button>
+                </div>
+              </div>
+
+              {/* Target User (if specific) */}
+              {messageType === 'specific' && (
+                <div className="space-y-2">
+                  <p className="text-xs font-black uppercase text-slate-500">Target User Email</p>
+                  <Input 
+                    placeholder="user@example.com"
+                    className="h-12 rounded-2xl bg-slate-50 border-none"
+                    value={targetUserEmail}
+                    onChange={(e) => setTargetUserEmail(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {/* Reason Input */}
+              <div className="space-y-2">
+                <p className="text-xs font-black uppercase text-slate-500">Message Reason/Topic</p>
+                <textarea 
+                  placeholder="e.g., System maintenance, special offer, urgent announcement..."
+                  className="w-full h-24 p-4 rounded-2xl bg-slate-50 border-none focus:ring-2 ring-primary resize-none"
+                  value={messageReason}
+                  onChange={(e) => setMessageReason(e.target.value)}
+                />
+              </div>
+
+              {/* Generate Button */}
+              <Button 
+                className="w-full h-14 rounded-2xl font-black text-lg"
+                onClick={handleGenerateMessage}
+                disabled={isGenerating || !messageReason}
+              >
+                {isGenerating ? <Loader2 className="animate-spin mr-2" /> : "✨ Generate Message"}
+              </Button>
+
+              {/* Generated Message */}
+              {generatedMessage && (
+                <div className="p-6 bg-emerald-50 rounded-2xl border-2 border-emerald-200 space-y-4">
+                  <div>
+                    <p className="text-xs font-black uppercase text-emerald-700 mb-2">Generated Message (Edit if needed)</p>
+                    <textarea 
+                      className="w-full h-24 p-4 rounded-2xl bg-white border-none focus:ring-2 ring-primary resize-none"
+                      value={generatedMessage}
+                      onChange={(e) => setGeneratedMessage(e.target.value)}
+                    />
+                  </div>
+                  <Button 
+                    className="w-full h-14 rounded-2xl font-black text-lg bg-emerald-600 hover:bg-emerald-700"
+                    onClick={handleSendAiMessage}
+                    disabled={isSending}
+                  >
+                    {isSending ? <Loader2 className="animate-spin mr-2" /> : "📤 Send Message"}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="payment-issues">
+          <Card className="rounded-[2.5rem] border-none shadow-sm overflow-hidden">
+            <CardHeader>
+              <CardTitle className="text-xl font-black">⚠️ Auto-Detected Payment Issues</CardTitle>
+              <CardDescription>AI automatically detects and can fix failed transactions from the last 24 hours</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {paymentIssues.length === 0 ? (
+                <div className="py-12 text-center text-slate-400">
+                  <CheckCircle2 size={40} className="mx-auto mb-4 opacity-40" />
+                  <p className="font-black">All systems healthy! ✨</p>
+                  <p className="text-sm">No payment issues detected in the last 24 hours.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {paymentIssues.map((issue, idx) => (
+                    <div key={idx} className="p-6 bg-red-50 border-l-4 border-red-500 rounded-xl flex items-start justify-between gap-4">
+                      <div className="space-y-2 flex-1">
+                        <p className="font-bold text-slate-900">{issue.userName}</p>
+                        <p className="text-sm text-slate-600">Error: {issue.issue}</p>
+                        <p className="text-xs text-slate-500">Amount: ₦{issue.amount?.toLocaleString() || 0}</p>
+                        <p className="text-xs text-slate-400">{issue.timestamp.toLocaleString()}</p>
+                      </div>
+                      <Button 
+                        className="rounded-xl font-black bg-red-600 hover:bg-red-700"
+                        onClick={() => handleAutoFixPayment(issue)}
+                        disabled={isFixing}
+                      >
+                        {isFixing ? <Loader2 className="animate-spin" /> : "🔧 Auto-Fix"}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Auto-Fix Log */}
+              {autoFixLog.length > 0 && (
+                <div className="p-4 bg-slate-100 rounded-xl">
+                  <p className="text-xs font-black uppercase text-slate-600 mb-3">Recent Fixes</p>
+                  {autoFixLog.slice(-5).map((log, idx) => (
+                    <p key={idx} className="text-xs text-slate-700 mb-1">
+                      ✅ {log.userId} - {log.result.description}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="broadcast">
            <Card className="rounded-[2.5rem] border-none shadow-sm overflow-hidden bg-slate-900 text-white">
               <CardHeader>
@@ -345,6 +672,89 @@ export default function AdminDashboard() {
                 </Button>
               </CardContent>
            </Card>
+        </TabsContent>
+
+        <TabsContent value="accounting">
+          <Card className="rounded-[2.5rem] border-none shadow-sm overflow-hidden">
+            <CardHeader>
+              <CardTitle className="text-xl font-black">💰 Business Accounting</CardTitle>
+              <CardDescription>Track your revenue, costs, and net profit.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {loadingAccounting ? (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="h-32 bg-slate-200 rounded-2xl animate-pulse" />
+                  ))}
+                </div>
+              ) : accounting ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <Card className="bg-gradient-to-br from-green-50 to-green-100 border-none rounded-2xl">
+                      <CardContent className="p-6 space-y-2">
+                        <p className="text-[10px] font-black uppercase text-green-700 tracking-widest">Total Revenue</p>
+                        <p className="text-3xl font-black text-green-900">₦{accounting.totalRevenue?.toLocaleString()}</p>
+                        <p className="text-xs text-green-700">From user deposits</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-br from-red-50 to-red-100 border-none rounded-2xl">
+                      <CardContent className="p-6 space-y-2">
+                        <p className="text-[10px] font-black uppercase text-red-700 tracking-widest">Total Costs</p>
+                        <p className="text-3xl font-black text-red-900">₦{accounting.totalCosts?.toLocaleString()}</p>
+                        <p className="text-xs text-red-700">PeyFlex purchases</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-none rounded-2xl">
+                      <CardContent className="p-6 space-y-2">
+                        <p className="text-[10px] font-black uppercase text-blue-700 tracking-widest">Net Profit</p>
+                        <p className={`text-3xl font-black ${accounting.netProfit >= 0 ? 'text-blue-900' : 'text-red-900'}`}>
+                          ₦{accounting.netProfit?.toLocaleString()}
+                        </p>
+                        <p className="text-xs text-blue-700">Revenue - Costs</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-none rounded-2xl">
+                      <CardContent className="p-6 space-y-2">
+                        <p className="text-[10px] font-black uppercase text-purple-700 tracking-widest">Profit Margin</p>
+                        <p className="text-3xl font-black text-purple-900">{accounting.marginPercent}%</p>
+                        <p className="text-xs text-purple-700">{accounting.transactionCount} transactions</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Alert className="bg-slate-50 border-slate-200 rounded-2xl">
+                    <AlertTitle className="font-black text-base">Money Flow Breakdown</AlertTitle>
+                    <AlertDescription className="mt-4 space-y-3 text-sm">
+                      <div className="flex justify-between items-center p-3 bg-white rounded-xl">
+                        <span className="font-bold">💵 User Deposits (Revenue)</span>
+                        <span className="font-black text-green-600">₦{accounting.totalRevenue?.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-3 bg-white rounded-xl">
+                        <span className="font-bold">📤 PeyFlex Spending (Costs)</span>
+                        <span className="font-black text-red-600">-₦{accounting.totalCosts?.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-xl border-2 border-green-200">
+                        <span className="font-black">Your Profit</span>
+                        <span className="font-black text-lg text-green-700">₦{accounting.netProfit?.toLocaleString()}</span>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+
+                  <Button className="w-full h-14 rounded-2xl font-black" onClick={fetchAccounting}>
+                    <RefreshCcw className="mr-2" /> Refresh Metrics
+                  </Button>
+                </>
+              ) : (
+                <Alert className="bg-slate-50">
+                  <AlertTitle>No Data Available</AlertTitle>
+                  <AlertDescription>Click refresh to load accounting metrics.</AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

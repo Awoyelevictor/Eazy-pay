@@ -1,20 +1,20 @@
 'use server';
 
-import { PAY1ST_CONFIG } from "@/firebase/config";
+// import { PAY1ST_CONFIG } from "@/firebase/config";
 
 /**
  * Server action to interact with Pay1st (Carry1st) Shop Gateway API.
  * Focused on Gaming fulfillments.
  */
 async function pay1stFetch(endpoint: string, method: 'GET' | 'POST', body?: any) {
-  const url = `${PAY1ST_CONFIG.BASE_URL}${endpoint}`;
+  const url = `https://api.carry1st.com/v1${endpoint}`; // `${PAY1ST_CONFIG.BASE_URL}${endpoint}`;
   
   try {
     const response = await fetch(url, {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${PAY1ST_CONFIG.API_KEY}`,
+        'Authorization': `Bearer ${process.env.PAY1ST_API_KEY}`, // `Bearer ${PAY1ST_CONFIG.API_KEY}`,
       },
       body: body ? JSON.stringify(body) : undefined,
       cache: 'no-store',

@@ -27,29 +27,54 @@ export const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
  * 3. VTPASS CONFIGURATION (Airtime, Data, Electricity, Cable)
  * Dashboard: https://www.vtpass.com/rest-api
  */
-export const VTU_CONFIG = {
-  API_KEY: process.env.VTPASS_API_KEY,
-  PUBLIC_KEY: process.env.NEXT_PUBLIC_VTPASS_PUBLIC_KEY,
-  SECRET_KEY: process.env.VTPASS_SECRET_KEY,
-  BASE_URL: "https://vtpass.com/api",
-};
+/*
+// export const VTU_CONFIG = {
+//   API_KEY: process.env.VTPASS_API_KEY,
+//   PUBLIC_KEY: process.env.NEXT_PUBLIC_VTPASS_PUBLIC_KEY,
+//   SECRET_KEY: process.env.VTPASS_SECRET_KEY,
+//   BASE_URL: "https://vtpass.com/api",
+// };
+*/
+
+/*
+// export const CONNECT_BRIDGE_CONFIG = {
+//   API_KEY: process.env.CONNECT_BRIDGE_API_KEY,
+//   BASE_URL: "https://connectbridge.com.ng/api",
+// };
+*/
 
 /**
  * 4. OTHER PROVIDERS (Gaming & Fallbacks)
  */
-export const PAY1ST_CONFIG = {
-  API_KEY: process.env.PAY1ST_API_KEY,
-  BASE_URL: "https://api.carry1st.com/v1",
-};
+/*
+// export const PAY1ST_CONFIG = {
+//   API_KEY: process.env.PAY1ST_API_KEY,
+//   BASE_URL: "https://api.carry1st.com/v1",
+// };
+*/
 
-export const SHAGO_CONFIG = {
-  HASH_KEY: process.env.SHAGO_HASH_KEY, 
-  BASE_URL: "https://api.shagopayments.com/public/api/v2",
-};
+/*
+// export const SHAGO_CONFIG = {
+//   HASH_KEY: process.env.SHAGO_HASH_KEY, 
+//   BASE_URL: "https://api.shagopayments.com/public/api/v2",
+// };
+*/
 
-export const SMEPLUG_CONFIG = {
-  SECRET_KEY: process.env.SMEPLUG_SECRET_KEY,
-  BASE_URL: "https://smeplug.ng/api/v1",
+/*
+// export const SMEPLUG_CONFIG = {
+//   SECRET_KEY: process.env.SMEPLUG_SECRET_KEY,
+//   BASE_URL: "https://smeplug.ng/api/v1",
+// };
+*/
+
+/**
+ * 5. PEYFLEX CONFIGURATION (Airtime, Data, Electricity, Cable, etc.)
+ * Dashboard: https://peyflex.com.ng/
+ * Docs: https://documenter.getpostman.com/view/17835214/2sB34imLMn
+ */
+export const PEYFLEX_CONFIG = {
+  API_KEY: process.env.PEYFLEX_API_KEY,
+  BASE_URL: "https://client.peyflex.com.ng",
 };
 
 // Initialize Firebase

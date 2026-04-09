@@ -1,7 +1,7 @@
 
 'use server';
 
-import { SHAGO_CONFIG } from "@/firebase/config";
+// import { SHAGO_CONFIG } from "@/firebase/config";
 
 /**
  * Server action to interact with Shago Payments API.
@@ -9,14 +9,14 @@ import { SHAGO_CONFIG } from "@/firebase/config";
  */
 async function shagoFetch(endpoint: string, body: any) {
   // Use direct process.env to prevent Next.js from stripping keys on client-to-server calls
-  const hashKey = process.env.SHAGO_HASH_KEY || SHAGO_CONFIG.HASH_KEY;
+  const hashKey = process.env.SHAGO_HASH_KEY; // || SHAGO_CONFIG.HASH_KEY;
   
   const headers = {
     'Content-Type': 'application/json',
     'hashKey': hashKey as string,
   };
 
-  const url = `${SHAGO_CONFIG.BASE_URL}${endpoint}`;
+  const url = `https://api.shagopayments.com/public/api/v2${endpoint}`; // `${SHAGO_CONFIG.BASE_URL}${endpoint}`;
   
   try {
     console.log(`SHAGO REQUEST: ${url}`, JSON.stringify(body));

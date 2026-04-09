@@ -61,6 +61,7 @@ export function WalletCard() {
       
       await addDoc(collection(firestore, "users", user.uid, "transactions"), {
         type: "funding",
+        category: "revenue",  // ← Mark as REVENUE (money users deposit)
         amount: amount,
         service: "Wallet Fund (Paystack)",
         status: "success",
@@ -155,7 +156,18 @@ export function WalletCard() {
       setShowWithdrawDialog(false);
       setWithdrawData({ amount: "", bankCode: "", accountNumber: "", pin: "" });
     } catch (error: any) {
-      toast({ title: "Transfer Rejected", description: error.message || "Paystack declined the transaction details.", variant: "destructive" });
+      const errorMsg = error.message?.toLowerCase() || "";
+      
+      // Check for Paystack starter business limitation
+      if (errorMsg.includes("starter") || errorMsg.includes("payout")) {
+        toast({ 
+          title: "Account Upgrade Required", 
+          description: "Your Paystack account is a Starter Business and cannot process payouts yet. You need to upgrade to SME or higher tier. Visit https://dashboard.paystack.co/settings/business to upgrade.",
+          variant: "destructive" 
+        });
+      } else {
+        toast({ title: "Transfer Rejected", description: error.message || "Paystack declined the transaction details.", variant: "destructive" });
+      }
     } finally {
       setIsWithdrawing(false);
     }
@@ -188,11 +200,16 @@ export function WalletCard() {
             {isFunding ? <Loader2 className="animate-spin" /> : <><Plus className="mr-2" /> Fund</>}
           </Button>
           <Dialog open={showWithdrawDialog} onOpenChange={setShowWithdrawDialog}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="flex-1 h-14 rounded-2xl bg-white/10 border-white/20 font-black backdrop-blur-sm transition-transform active:scale-95">
-                <ArrowLeftRight className="mr-2" /> Withdraw
-              </Button>
-            </DialogTrigger>
+            <div className="flex-1 group relative" title="Withdrawals are available once your Paystack account is upgraded">
+              <DialogTrigger asChild>
+                <Button variant="outline" className="w-full h-14 rounded-2xl bg-white/10 border-white/20 font-black backdrop-blur-sm transition-transform active:scale-95 opacity-50 cursor-not-allowed">
+                  <ArrowLeftRight className="mr-2" /> Withdraw (Coming Soon)
+                </Button>
+              </DialogTrigger>
+              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-3 py-1 rounded text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                Requires Paystack SME upgrade
+              </div>
+            </div>
             <DialogContent className="rounded-[2.5rem] sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-2xl font-black">Transfer to Bank</DialogTitle>

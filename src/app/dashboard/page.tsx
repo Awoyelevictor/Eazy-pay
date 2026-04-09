@@ -3,6 +3,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Bell, Search, UserCircle, Zap, Loader2, AlertCircle, Settings, ArrowLeft, Wallet } from "lucide-react";
 import { WalletCard } from "@/components/dashboard/WalletCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
@@ -18,6 +19,17 @@ import { NotificationDrawer } from "@/components/notifications/NotificationDrawe
 export default function DashboardPage() {
   const { user, loading } = useUser();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const action = searchParams.get("action");
+
+  useEffect(() => {
+    if (action === "quick-buy" || action === "ai-chat") {
+      const element = document.getElementById("ai-buy");
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth" });
+      }
+    }
+  }, [action]);
 
   if (loading) {
     return (

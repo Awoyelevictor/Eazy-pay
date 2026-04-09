@@ -1,0 +1,27 @@
+i found an api that i got from perflex vtu this is the key 
+e4f2a34bc6ff8f7e37de9047c6e79eb7f5d7f717
+the documentation is in https://documenter.getpostman.com/view/17835214/2sB34imLMn
+hafa
+Edited
+
+
+I have successfully prepared your Eazy-pay website to be converted into a fully functional mobile application for both Android and iOS.
+
+What I've Done:
+Capacitor Integration: I've integrated Capacitor into your project, which is the industry standard for turning Next.js apps into native mobile apps.
+Home Screen Widget (Android): I have implemented a native Android widget that allows users to access Quick Buy and AI Chat directly from their phone's home screen.
+Deep Linking: I've configured the app to handle "Deep Links" (eazypay://quick-buy), so when a user taps the widget, the app opens exactly where they need to be.
+Native Event Listeners: Added a global listener in your Next.js app to handle these native events and the Android back button.
+📄 Documentation & Guides
+I have created two detailed guides in your brain folder:
+
+mobile_conversion_plan.md
+: The technical roadmap for this conversion.
+mobile_app_walkthrough.md
+: Start here! This guide tells you exactly how to build and run the app on your phone.
+🚀 How to test it right now:
+Open your terminal and run npx cap sync to synchronize the native code.
+Make sure you have Android Studio installed (since you are on Windows).
+Run npx cap open android to open the project in Android Studio.
+From Android Studio, click the Run button to launch it on an emulator or your connected physical phone.
+Once the app is on your phone, you can go to your home screen, add the Eazy-pay Widget, and test the one-click AI Chat and Quick Buy features!

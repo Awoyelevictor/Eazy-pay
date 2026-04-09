@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
-import { processPayment, getVariations, getInsuranceOptions } from "@/app/actions/vtpass";
+// Peyflex doesn't have insurance endpoints yet - keeping commented out
+// import { processPayment, getVariations, getInsuranceOptions } from "@/app/actions/vtpass";
 
 export default function InsurancePurchase() {
   const { user } = useUser();
@@ -58,19 +59,19 @@ export default function InsurancePurchase() {
   useEffect(() => {
     const fetchOptions = async () => {
       try {
-        const [vData, cData, eData, sData, bData] = await Promise.all([
-          getVariations("ui-insure"),
-          getInsuranceOptions("color"),
-          getInsuranceOptions("engine-capacity"),
-          getInsuranceOptions("state"),
-          getInsuranceOptions("brand")
-        ]);
+        // const [vData, cData, eData, sData, bData] = await Promise.all([
+        //   getVariations("ui-insure"),
+        //   getInsuranceOptions("color"),
+        //   getInsuranceOptions("engine-capacity"),
+        //   getInsuranceOptions("state"),
+        //   getInsuranceOptions("brand")
+        // ]);
 
-        setVariations(vData.content?.variations || []);
-        setColors(cData.content || []);
-        setEngineCapacities(eData.content || []);
-        setStates(sData.content || []);
-        setBrands(bData.content || []);
+        // setVariations(vData.content?.variations || []);
+        // setColors(cData.content || []);
+        // setEngineCapacities(eData.content || []);
+        // setStates(sData.content || []);
+        // setBrands(bData.content || []);
       } catch (error) {
         toast({ title: "Failed to load options", variant: "destructive" });
       } finally {
@@ -80,15 +81,15 @@ export default function InsurancePurchase() {
     fetchOptions();
   }, []);
 
-  useEffect(() => {
-    if (!formData.state) return;
-    getInsuranceOptions("lga", formData.state).then(d => setLgas(d.content || []));
-  }, [formData.state]);
+  // useEffect(() => {
+  //   if (!formData.state) return;
+  //   getInsuranceOptions("lga", formData.state).then(d => setLgas(d.content || []));
+  // }, [formData.state]);
 
-  useEffect(() => {
-    if (!formData.vehicle_make) return;
-    getInsuranceOptions("model", formData.vehicle_make).then(d => setModels(d.content || []));
-  }, [formData.vehicle_make]);
+  // useEffect(() => {
+  //   if (!formData.vehicle_make) return;
+  //   getInsuranceOptions("model", formData.vehicle_make).then(d => setModels(d.content || []));
+  // }, [formData.vehicle_make]);
 
   const selectedVariation = variations.find(v => v.variation_code === formData.variation_code);
   const totalAmount = selectedVariation ? parseFloat(selectedVariation.variation_amount) : 0;
@@ -102,6 +103,7 @@ export default function InsurancePurchase() {
 
     setIsProcessing(true);
     try {
+      /* 
       const result = await processPayment({
         request_id: Date.now().toString(),
         serviceID: "ui-insure",
@@ -136,6 +138,8 @@ export default function InsurancePurchase() {
         createdAt: new Date().toISOString(),
       });
       setIsSuccess(true);
+      */
+      throw new Error("Insurance service is currently being updated for the new API. Please check back soon!");
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {

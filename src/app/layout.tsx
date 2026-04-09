@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   description: 'Fast, secure, and reliable top-up for airtime, data, and game credits.',
 };
 
+import { CapacitorListener } from "@/components/layout/CapacitorListener";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,6 +30,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased bg-background" suppressHydrationWarning>
         <FirebaseClientProvider>
+          <CapacitorListener />
           {children}
           <Toaster />
         </FirebaseClientProvider>

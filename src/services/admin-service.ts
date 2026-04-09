@@ -19,6 +19,58 @@ import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
 /**
+ * Calculate business metrics: Revenue, Costs, and Net Profit
+ */
+export async function getAccountingMetrics(db: Firestore) {
+  try {
+    const usersSnap = await getDocs(collection(db, 'users'));
+    const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    let totalRevenue = 0;  // User deposits (category: "revenue")
+    let totalCosts = 0;    // PeyFlex transactions (category: "cost")
+    let transactionCount = 0;
+
+    const transactionPromises = users.map(async (userDoc: any) => {
+      try {
+        const txSnap = await getDocs(collection(db, 'users', userDoc.id, 'transactions'));
+        txSnap.docs.forEach(doc => {
+          const tx = doc.data();
+          if (tx.status === 'success' && tx.amount) {
+            const amount = Number(tx.amount) || 0;
+            if (tx.category === 'revenue') {
+              totalRevenue += amount;
+            } else if (tx.category === 'cost') {
+              totalCosts += amount;
+            }
+            transactionCount++;
+          }
+        });
+      } catch (e) {
+        // Silent catch
+      }
+    });
+
+    await Promise.all(transactionPromises);
+
+    const netProfit = totalRevenue - totalCosts;
+    const marginPercent = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(2) : '0.00';
+
+    return {
+      totalRevenue,
+      totalCosts,
+      netProfit,
+      marginPercent,
+      profitMarginPercentage: `${marginPercent}%`,
+      transactionCount,
+      averageTransactionValue: transactionCount > 0 ? (totalCosts / transactionCount).toFixed(2) : '0.00'
+    };
+  } catch (error: any) {
+    console.error("Accounting Metrics Error:", error);
+    throw error;
+  }
+}
+
+/**
  * Fetch aggregated statistics for the admin dashboard.
  */
 export async function getGlobalStats(db: Firestore) {

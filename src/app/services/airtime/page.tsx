@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
-import { processSMEPlugAirtime, getSMEPlugNetworkId } from "@/app/actions/smeplug";
+import { processPeyflexAirtime, getPeyflexAirtimeNetworks } from "@/app/actions/peyflex";
+import { getSMEPlugNetworkId } from "@/lib/network";
 import { createAINotification } from "@/services/notification-service";
 
 const networks = [
@@ -30,6 +30,8 @@ export default function AirtimePurchase() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const { toast } = useToast();
+  // Dynamic network ID map fetched from SMEPlug (can be T1/T2 strings or numbers)
+  const networkIdMap = useRef<Record<string, number | string>>({});
 
   const userRef = useMemo(() => {
     if (!firestore || !user) return null;
@@ -37,6 +39,45 @@ export default function AirtimePurchase() {
   }, [firestore, user]);
 
   const { data: profile } = useDoc(userRef);
+
+  // Fetch real network IDs from Peyflex
+  useEffect(() => {
+    getPeyflexAirtimeNetworks()
+      .then(res => {
+        console.log("Peyflex networks raw:", JSON.stringify(res).slice(0, 600));
+        const list: any[] = Array.isArray(res) ? res
+          : Array.isArray(res?.data) ? res.data
+          : Array.isArray(res?.networks) ? res.networks
+          : [];
+        const map: Record<string, number | string> = {};
+        for (const net of list) {
+          // Preserve raw ID — could be "T1", "T2" or 1, 2
+          const rawId = net.network_id ?? net.id ?? net.networkId;
+          const name = (net.network_name || net.name || net.network || "").toLowerCase();
+          if (rawId === undefined || rawId === null) continue;
+          if (name.includes("mtn")) map["mtn"] = rawId;
+          else if (name.includes("glo")) map["glo"] = rawId;
+          else if (name.includes("airtel")) map["airtel"] = rawId;
+          else if (name.includes("9mobile") || name.includes("etisalat")) map["9mobile"] = rawId;
+        }
+        if (Object.keys(map).length > 0) {
+          networkIdMap.current = map;
+          console.log("Network ID map loaded:", map);
+        }
+      })
+      .catch(() => console.log("Using static network ID map as fallback"));
+  }, []);
+
+  const getNetworkId = (networkName: string): number | string => {
+    const key = networkName.toLowerCase().replace(/\s/g, "");
+    // Try exact match first
+    if (networkIdMap.current["mtn"] && key.includes("mtn")) return networkIdMap.current["mtn"];
+    if (networkIdMap.current["glo"] && key.includes("glo")) return networkIdMap.current["glo"];
+    if (networkIdMap.current["airtel"] && key.includes("airtel")) return networkIdMap.current["airtel"];
+    if (networkIdMap.current["9mobile"] && (key.includes("9mobile") || key.includes("etisalat"))) return networkIdMap.current["9mobile"];
+    // Fallback to static numeric mapping
+    return getSMEPlugNetworkId(networkName);
+  };
 
   const handlePurchase = async () => {
     if (!user || !firestore || !userRef) return;
@@ -60,15 +101,14 @@ export default function AirtimePurchase() {
     setIsProcessing(true);
 
     try {
-      const result = await processSMEPlugAirtime({
-        network_id: getSMEPlugNetworkId(selectedNetwork.name),
+      const result = await processPeyflexAirtime({
+        network: selectedNetwork.name.toUpperCase(), // Peyflex expects network name like 'MTN', 'GLO', etc.
         amount: purchaseAmount,
-        phone_number: phoneNumber
+        mobile_number: phoneNumber
       });
 
-      // SMEPlug success status is usually a boolean true or "success" string
-      if (!result.status || result.status === 'fail' || result.status === 'failed') {
-        throw new Error(result.message || "Transaction failed at SMEPlug gateway");
+      if (result.status && result.status.toLowerCase() === 'failed') {
+        throw new Error(result.message || "Transaction failed at Peyflex gateway");
       }
 
       // 1. Deduct balance
@@ -81,9 +121,9 @@ export default function AirtimePurchase() {
         network: selectedNetwork.name,
         recipient: phoneNumber,
         status: "success",
-        requestId: result.reference || result.id || `SME-${Date.now()}`,
+        requestId: result.reference || result.id || `PEYFLEX-AIR-${Date.now()}`,
         createdAt: new Date().toISOString(),
-        provider: "SMEPlug"
+        provider: "Peyflex"
       };
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
@@ -92,7 +132,7 @@ export default function AirtimePurchase() {
       await createAINotification(
         firestore, 
         user.uid, 
-        `Successfully purchased ₦${purchaseAmount} ${selectedNetwork.name} airtime for ${phoneNumber} via SMEPlug`,
+        `Successfully purchased ₦${purchaseAmount} ${selectedNetwork.name} airtime for ${phoneNumber} via Peyflex`,
         user.displayName || ''
       );
 

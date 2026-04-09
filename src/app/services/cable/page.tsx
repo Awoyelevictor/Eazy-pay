@@ -14,7 +14,7 @@ import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { processPayment } from "@/app/actions/vtpass";
+import { processPeyflexCable, verifyPeyflexCableIUC, getPeyflexCableProviders } from "@/app/actions/peyflex";
 import { createAINotification } from "@/services/notification-service";
 
 const providers = [
@@ -45,17 +45,6 @@ export default function CablePurchase() {
     return selectedProvider.bundles.find(b => b.variation === selectedBundleId);
   }, [selectedProvider, selectedBundleId]);
 
-  const generateRequestId = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = (now.getMonth() + 1).toString().padStart(2, "0");
-    const day = now.getDate().toString().padStart(2, "0");
-    const hour = now.getHours().toString().padStart(2, "0");
-    const minute = now.getMinutes().toString().padStart(2, "0");
-    const randomPart = Math.floor(1000000 + Math.random() * 9000000);
-    return `${year}${month}${day}${hour}${minute}${randomPart}`;
-  };
-
   const handlePurchase = async () => {
     if (!user || !firestore || !userRef || !selectedBundle || !selectedProvider) return;
     
@@ -72,19 +61,16 @@ export default function CablePurchase() {
     setIsProcessing(true);
 
     try {
-      const requestId = generateRequestId();
-      
-      const result = await processPayment({
-        request_id: requestId,
-        serviceID: selectedProvider.vtuId,
-        billersCode: smartCardNumber,
-        variation_code: selectedBundle.variation,
-        amount: selectedBundle.price,
-        phone: profile?.phoneNumber || "08011111111"
+      const result = await processPeyflexCable({
+        identifier: selectedProvider.vtuId,
+        plan: selectedBundle.variation,
+        iuc: smartCardNumber,
+        phone: user.phoneNumber || '+234',
+        amount: selectedBundle.price.toString(),
       });
 
-      if (result.code !== '000') {
-        throw new Error(result.response_description || "Subscription Failed");
+      if (result.status !== 'success' && result.status !== true) {
+        throw new Error(result.message || "Subscription Failed");
       }
 
       const transactionData = {
@@ -93,8 +79,9 @@ export default function CablePurchase() {
         service: `${selectedProvider.name} - ${selectedBundle.label}`,
         recipient: smartCardNumber,
         status: "success",
-        requestId: requestId,
+        requestId: result.reference || result.id || `SME-CAB-${Date.now()}`,
         createdAt: new Date().toISOString(),
+        provider: "SMEPlug"
       };
 
       await updateDoc(userRef, {
@@ -107,7 +94,7 @@ export default function CablePurchase() {
       await createAINotification(
         firestore,
         user.uid,
-        `Successfully renewed ${selectedProvider.name} subscription for ${smartCardNumber}`,
+        `Successfully renewed ${selectedProvider.name} subscription for ${smartCardNumber} via SMEPlug`,
         user.displayName || ''
       );
 

@@ -1,13 +1,13 @@
 
 'use server';
 
-import { SMEPLUG_CONFIG } from "@/firebase/config";
+// import { SMEPLUG_CONFIG } from "@/firebase/config";
 
 /**
  * Generic SMEPlug requester to handle server-side calls with Bearer Token.
  */
 async function smeplugFetch(endpoint: string, method: 'GET' | 'POST', body?: any) {
-  const secretKey = process.env.SMEPLUG_SECRET_KEY || SMEPLUG_CONFIG.SECRET_KEY;
+  const secretKey = process.env.SMEPLUG_SECRET_KEY; // || SMEPLUG_CONFIG.SECRET_KEY;
   
   const headers: any = {
     'Authorization': `Bearer ${secretKey}`,
@@ -15,7 +15,7 @@ async function smeplugFetch(endpoint: string, method: 'GET' | 'POST', body?: any
     'Accept': 'application/json',
   };
 
-  const url = `${SMEPLUG_CONFIG.BASE_URL}${endpoint}`;
+  const url = `https://smeplug.ng/api/v1${endpoint}`; // `${SMEPLUG_CONFIG.BASE_URL}${endpoint}`;
   
   const options: RequestInit = {
     method,
@@ -28,17 +28,27 @@ async function smeplugFetch(endpoint: string, method: 'GET' | 'POST', body?: any
   }
 
   try {
-    console.log(`SMEPLUG REQUEST [${method}] ${endpoint}`);
+    console.log(`SMEPLUG REQUEST [${method}] ${endpoint}`, body ? JSON.stringify(body) : '');
     
     const response = await fetch(url, options);
+    const text = await response.text();
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`SMEPLUG HTTP ERROR (${response.status}):`, errorText);
-      throw new Error(`SMEPlug Gateway Error: ${response.status}`);
+    // Try to parse as JSON regardless of status
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { raw: text };
     }
 
-    const data = await response.json();
+    console.log(`SMEPLUG RESPONSE [${response.status}] ${endpoint}:`, JSON.stringify(data).slice(0, 400));
+
+    if (!response.ok) {
+      // Surface the real error message from SMEPlug
+      const msg = data?.msg || data?.message || data?.error || data?.description || `SMEPlug Error ${response.status}`;
+      throw new Error(msg);
+    }
+
     return data;
   } catch (error: any) {
     console.error(`SMEPlug Connection Failure (${endpoint}):`, error.message);
@@ -50,23 +60,25 @@ async function smeplugFetch(endpoint: string, method: 'GET' | 'POST', body?: any
  * Purchase Airtime via SMEPlug.
  */
 export async function processSMEPlugAirtime(payload: {
-  network_id: number; // 1=MTN, 2=Glo, 3=Airtel, 4=9mobile
+  network_id: number | string; // Could be 1,2,3,4 OR 'T1','T2','T3','T4'
   amount: number;
   phone_number: string;
 }) {
-  return await smeplugFetch('/airtime/purchase', 'POST', payload);
+  // Documentation shows /vtu for airtime/topup
+  return await smeplugFetch('/vtu', 'POST', payload);
 }
 
 /**
  * Purchase Data via SMEPlug.
  */
 export async function processSMEPlugData(payload: {
-  network_id: number;
+  network_id: number | string;
   plan_id: number | string;
   phone_number: string;
   customer_reference?: string;
 }) {
-  return await smeplugFetch('/data/purchase', 'POST', payload);
+  // Documentation shows /data for data purchase
+  return await smeplugFetch('/data', 'POST', payload);
 }
 
 /**
@@ -77,13 +89,50 @@ export async function getSMEPlugDataPlans() {
 }
 
 /**
- * Helper to get Network ID from Name
+ * Get available Networks from SMEPlug (returns real network IDs).
  */
-export function getSMEPlugNetworkId(name: string): number {
-  const lowerName = name.toLowerCase();
-  if (lowerName.includes('mtn')) return 1;
-  if (lowerName.includes('airtel')) return 2;
-  if (lowerName.includes('9mobile') || lowerName.includes('etisalat')) return 3;
-  if (lowerName.includes('glo')) return 4;
-  return 1; // Default to MTN
+export async function getSMEPlugNetworks() {
+  return await smeplugFetch('/networks', 'GET');
 }
+
+/**
+ * Get Wallet Balance from SMEPlug.
+ */
+export async function getSMEPlugBalance() {
+  return await smeplugFetch('/wallet/balance', 'GET');
+}
+
+/**
+ * Verify a merchant/customer (e.g. Electricity Meter or Cable TV SmartCard)
+ */
+export async function verifySMEPlugMerchant(payload: { 
+  customer_id: string; 
+  service_id: string; // e.g., 'dstv', 'gotv', 'ikeja-electric'
+  variation_id?: string;
+}) {
+  return await smeplugFetch('/bill-payment/verify', 'POST', payload);
+}
+
+/**
+ * Purchase TV Subscription via SMEPlug.
+ */
+export async function processSMEPlugTV(payload: {
+  service_id: string;
+  variation_id: string;
+  customer_id: string;
+}) {
+  return await smeplugFetch('/bill-payment/tv/purchase', 'POST', payload);
+}
+
+/**
+ * Purchase Electricity via SMEPlug.
+ */
+export async function processSMEPlugElectricity(payload: {
+  service_id: string;
+  variation_id: string; // 'prepaid' or 'postpaid'
+  customer_id: string;
+  amount: number;
+}) {
+  return await smeplugFetch('/bill-payment/electricity/purchase', 'POST', payload);
+}
+

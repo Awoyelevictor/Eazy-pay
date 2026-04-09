@@ -1,7 +1,7 @@
 
 'use server';
 
-import { VTU_CONFIG } from "@/firebase/config";
+// import { VTU_CONFIG } from "@/firebase/config";
 
 /**
  * Generic VTpass requester to handle server-side calls.
@@ -10,16 +10,16 @@ import { VTU_CONFIG } from "@/firebase/config";
 async function vtpassFetch(endpoint: string, method: 'GET' | 'POST', body?: any) {
   // Pull secrets purely on the SERVER SIDE, guaranteeing Next.js doesn't strip them!
   const headers: any = {
-    'api-key': process.env.VTPASS_API_KEY || VTU_CONFIG.API_KEY,
-    'public-key': process.env.NEXT_PUBLIC_VTPASS_PUBLIC_KEY || VTU_CONFIG.PUBLIC_KEY,
-    'secret-key': process.env.VTPASS_SECRET_KEY || VTU_CONFIG.SECRET_KEY,
+    'api-key': process.env.VTPASS_API_KEY, // || VTU_CONFIG.API_KEY,
+    'public-key': process.env.NEXT_PUBLIC_VTPASS_PUBLIC_KEY, // || VTU_CONFIG.PUBLIC_KEY,
+    'secret-key': process.env.VTPASS_SECRET_KEY, // || VTU_CONFIG.SECRET_KEY,
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   };
 
   // Keep sandbox link ready just in case they are trying to use test keys
   // For sandbox testing, use: https://sandbox.vtpass.com/api
-  const url = `${VTU_CONFIG.BASE_URL}${endpoint}`;
+  const url = `https://vtpass.com/api${endpoint}`; // `${VTU_CONFIG.BASE_URL}${endpoint}`;
   
   const options: RequestInit = {
     method,

@@ -12,7 +12,9 @@ import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { processSMEPlugAirtime, processSMEPlugData, getSMEPlugNetworkId } from "@/app/actions/smeplug";
+import { processPeyflexAirtime, processPeyflexData } from "@/app/actions/peyflex";
+import { getSMEPlugNetworkId } from "@/lib/network";
+import { createAINotification } from "@/services/notification-service";
 
 // Price mapping for AI consistency
 const PRICE_MAP: Record<string, number> = {
@@ -104,25 +106,21 @@ export function AIQuickBuy() {
       let result;
 
       if (parsedResult.serviceType === 'airtime') {
-        result = await processSMEPlugAirtime({
-          network_id: getSMEPlugNetworkId(networkName),
+        result = await processPeyflexAirtime({
+          network: networkName.toUpperCase(), // Peyflex expects uppercase network name
           amount: cost,
-          phone_number: recipientPhone
+          mobile_number: recipientPhone
         });
       } else {
-        const planId = SMEPLUG_DATA_PLANS[`${networkName.toLowerCase()}-${cost}`];
-        if (!planId) {
-          throw new Error(`That specific data plan via AI box requires manual selection on the Data page for 100% accuracy.`);
-        }
-        result = await processSMEPlugData({
-          network_id: getSMEPlugNetworkId(networkName),
-          plan_id: planId,
-          phone_number: recipientPhone,
-          customer_reference: `SME-AI-${Date.now()}`
+        // AI Data logic using Peyflex
+        result = await processPeyflexData({
+          network: networkName.toUpperCase(),
+          plan_code: SMEPLUG_DATA_PLANS[`${networkName.toLowerCase()}-1000`] || 'M1000', // Plan code for 1GB/1000MB
+          mobile_number: recipientPhone,
         });
       }
 
-      if (!result.status || result.status === 'fail' || result.status === 'failed') {
+      if (result.status !== 'success' && result.status !== true) {
         throw new Error(result.message || "SMEPlug gateway rejected the purchase.");
       }
 

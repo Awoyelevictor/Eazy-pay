@@ -11,7 +11,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
-import { processSMEPlugData, getSMEPlugDataPlans, getSMEPlugNetworkId } from "@/app/actions/smeplug";
+import { processPeyflexData, getPeyflexDataPlans } from "@/app/actions/peyflex";
+import { getSMEPlugNetworkId } from "@/lib/network";
 import { createAINotification } from "@/services/notification-service";
 import { useEffect } from "react";
 
@@ -41,14 +42,53 @@ export default function DataPurchase() {
 
   const { data: profile } = useDoc(userRef);
 
-  // Fetch ALL plans from SMEPlug on mount
+  // Fetch ALL plans from Peyflex on mount
   useEffect(() => {
     setIsLoadingPlans(true);
-    getSMEPlugDataPlans()
-      .then(res => {
-        if (res.status === 'success' || res.status === true) {
-          // SMEPlug returns a list of data plans
-          setAllPlans(res.data || []);
+    // Peyflex requires network parameter, so we'll fetch plans for all networks
+    const networks = ['MTN', 'GLO', 'AIRTEL', '9MOBILE'];
+    const promises = networks.map(network => getPeyflexDataPlans(network));
+    
+    Promise.allSettled(promises)
+      .then(results => {
+        let allPlans: any[] = [];
+        results.forEach((result, index) => {
+          const network = networks[index];
+          
+          if (result.status === 'fulfilled') {
+            const res = result.value;
+            console.log(`✅ ${network} plans response:`, JSON.stringify(res).slice(0, 200));
+            
+            // Handle different response formats
+            const plans = res.data ?? res.plans ?? res.result ?? (Array.isArray(res) ? res : []);
+            if (Array.isArray(plans) && plans.length > 0) {
+              // Use the network identifier from response (e.g., "glo_data"), not the uppercase name
+              const networkId = res.network || network.toLowerCase() + '_data';
+              
+              // Add network info to each plan using the actual network ID from response
+              const plansWithNetwork = plans.map(plan => ({ 
+                ...plan, 
+                network: networkId,  // Use actual network ID from API response
+                displayNetwork: network  // Keep display name for UI
+              }));
+              allPlans = allPlans.concat(plansWithNetwork);
+              console.log(`📊 Added ${plans.length} plans for ${network} (network ID: ${networkId})`);
+            } else {
+              console.warn(`⚠️ No valid plans found in response for ${network}`);
+            }
+          } else {
+            console.error(`❌ ${network} data fetch failed:`, result.reason);
+          }
+        });
+        
+        // Keep only valid plan objects
+        const validPlans = allPlans.filter(p => typeof p === 'object' && p !== null);
+        console.log(`📈 Total valid plans loaded: ${validPlans.length}`);
+        console.log(`   Plans structure:`, validPlans.slice(0, 2)); // Log first 2 plans to see structure
+        setAllPlans(validPlans);
+        
+        if (validPlans.length === 0) {
+          console.warn("⚠️ No valid data plans loaded from any network");
         }
       })
       .catch(err => console.error("Plan Fetch Error:", err))
@@ -56,10 +96,37 @@ export default function DataPurchase() {
   }, []);
 
   const availableBundles = useMemo(() => {
-    if (!selectedNetwork) return [];
-    const netId = getSMEPlugNetworkId(selectedNetwork.name);
-    // Filter the big plan list by the selected network
-    return allPlans.filter(p => Number(p.network_id) === netId || p.network === selectedNetwork.name);
+    if (!selectedNetwork || !Array.isArray(allPlans) || allPlans.length === 0) {
+      console.log("🔍 No bundles available:", { 
+        selectedNetwork: selectedNetwork?.name, 
+        allPlanCount: allPlans?.length || 0 
+      });
+      return [];
+    }
+    
+    // Map display network name to actual network ID used in plans
+    const networkIdMap: Record<string, string> = {
+      'MTN': 'mtn_data',
+      'Glo': 'glo_data',
+      'Airtel': 'airtel_data',
+      '9mobile': '9mobile_data'
+    };
+    const networkId = networkIdMap[selectedNetwork.name];
+    
+    console.log(`🔍 Filtering plans for network: ${selectedNetwork.name} → ID: ${networkId}`);
+    console.log(`   Total plans loaded: ${allPlans.length}`);
+    console.log(`   Available networks in plans:`, [...new Set(allPlans.map(p => p.network))]);
+    
+    const filtered = allPlans.filter(p => {
+      const match = p.network === networkId;
+      return match;
+    });
+
+    console.log(`📊 Available bundles for ${selectedNetwork.name}: ${filtered.length}`);
+    if (filtered.length > 0) {
+      console.log(`   Sample plan:`, filtered[0]);
+    }
+    return filtered;
   }, [allPlans, selectedNetwork]);
 
   const handlePurchase = async () => {
@@ -74,15 +141,18 @@ export default function DataPurchase() {
     setIsProcessing(true);
 
     try {
-      const result = await processSMEPlugData({
-        network_id: getSMEPlugNetworkId(selectedNetwork.name),
-        plan_id: selectedBundle.plan_id || selectedBundle.id,
-        phone_number: phoneNumber,
-        customer_reference: `SME-DT-${Date.now()}`
+      // Peyflex API expects plan_id and network
+      const planId = selectedBundle.plan_id ?? selectedBundle.id ?? selectedBundle.api_code ?? selectedBundle.data_plan ?? selectedBundle.plan_code;
+      console.log("Purchasing data plan:", { planId, bundle: selectedBundle });
+
+      const result = await processPeyflexData({
+        network: selectedNetwork.name.toUpperCase(),
+        plan_code: planId,
+        mobile_number: phoneNumber,
       });
 
-      if (!result.status || result.status === 'fail' || result.status === 'failed') {
-        throw new Error(result.message || "Subscription failed at SMEPlug gateway");
+      if (result.status && result.status.toLowerCase() === 'failed') {
+        throw new Error(result.message || "Subscription failed at Peyflex gateway");
       }
 
       // 1. Deduct balance
@@ -91,14 +161,16 @@ export default function DataPurchase() {
       // 2. Log transaction
       const transactionData = {
         type: "data",
+        category: "cost",  // ← Mark as COST (PeyFlex expense)
         amount: cost,
         network: selectedNetwork.name,
         recipient: phoneNumber,
-        service: selectedBundle.name || selectedBundle.allowance,
+        service: selectedBundle.label || selectedBundle.name || selectedBundle.plan_name || selectedBundle.allowance,
+        planCode: selectedBundle.plan_code,
         status: "success",
-        requestId: result.reference || result.id || `SME-DT-${Date.now()}`,
+        requestId: result.reference || result.id || `PEYFLEX-DT-${Date.now()}`,
         createdAt: new Date().toISOString(),
-        provider: "SMEPlug"
+        provider: "Peyflex"
       };
       const transactionsRef = collection(firestore, "users", user.uid, "transactions");
       await addDoc(transactionsRef, transactionData);
@@ -107,7 +179,7 @@ export default function DataPurchase() {
       await createAINotification(
         firestore,
         user.uid,
-        `Successfully subscribed ${selectedBundle.name || selectedBundle.allowance} for ${phoneNumber} via SMEPlug`,
+        `Successfully subscribed ${selectedBundle.label || selectedBundle.name || selectedBundle.allowance} for ${phoneNumber} via Peyflex`,
         user.displayName || ''
       );
 
@@ -118,6 +190,7 @@ export default function DataPurchase() {
     } finally {
       setIsProcessing(false);
     }
+    setIsProcessing(false);
   };
 
   if (isSuccess) {
@@ -127,7 +200,7 @@ export default function DataPurchase() {
           <CheckCircle2 size={56} className="animate-bounce" />
         </div>
         <h1 className="text-3xl font-black mb-3">Data Sent!</h1>
-        <p className="text-muted-foreground mb-8">{selectedBundle?.name} sent to {phoneNumber}.</p>
+        <p className="text-muted-foreground mb-8">{selectedBundle?.label || selectedBundle?.name || selectedBundle?.plan_name} sent to {phoneNumber}.</p>
         <div className="w-full max-w-xs space-y-4">
           <Button className="w-full rounded-2xl h-14" onClick={() => setIsSuccess(false)}>Buy More</Button>
           <Link href="/dashboard" className="block"><Button variant="outline" className="w-full rounded-2xl h-14">Dashboard</Button></Link>
@@ -135,6 +208,45 @@ export default function DataPurchase() {
       </div>
     );
   }
+
+  // Group plans by validity/duration type
+  const CATEGORIES = ["Daily", "Weekly", "Monthly", "Others"] as const;
+  type Category = typeof CATEGORIES[number];
+  const [activeCategory, setActiveCategory] = useState<Category>("Daily");
+
+  const categorizedBundles = useMemo<Record<Category, any[]>>(() => {
+    const groups: Record<Category, any[]> = { Daily: [], Weekly: [], Monthly: [], Others: [] };
+    for (const b of availableBundles) {
+      // Parse the label field which contains info like "200MB =N250 (2Days)" or "500MB = N280 (30 Days)"
+      const label = (b.label || b.name || b.plan_name || b.allowance || "").toLowerCase();
+      const combined = label; // label already has all the info we need
+
+      // Extract days from pattern like "(2days)", "(7days)", "(30 days)", etc.
+      const dayMatch = combined.match(/\((\d+)\s*days?\)/i);
+      const days = dayMatch ? parseInt(dayMatch[1]) : 0;
+
+      console.log(`📋 Categorizing: "${label}" → ${days} days`);
+
+      if (days >= 28 || combined.includes("month") || combined.includes("30 day")) {
+        groups.Monthly.push(b);
+      } else if (days >= 7 || combined.includes("week") || combined.includes("7 day")) {
+        groups.Weekly.push(b);
+      } else if (days >= 1 || combined.includes("daily") || combined.includes("24hr") || combined.includes("1 day") || combined.includes("2 day") || combined.includes("3 day")) {
+        groups.Daily.push(b);
+      } else {
+        groups.Others.push(b);
+      }
+    }
+    console.log(`✅ Categorized ${availableBundles.length} plans:`, { 
+      Daily: groups.Daily.length, 
+      Weekly: groups.Weekly.length, 
+      Monthly: groups.Monthly.length, 
+      Others: groups.Others.length 
+    });
+    return groups;
+  }, [availableBundles]);
+
+  const displayedPlans = categorizedBundles[activeCategory];
 
   return (
     <div className="min-h-screen bg-background">
@@ -152,7 +264,7 @@ export default function DataPurchase() {
                 key={net.name}
                 onClick={() => { setSelectedNetwork(net); setSelectedBundle(null); }}
                 className={`flex flex-col items-center gap-2 p-2 rounded-2xl border-2 transition-all ${
-                  selectedNetwork?.name === net.name ? "bg-primary/5 border-primary" : "bg-white border-secondary"
+                  selectedNetwork?.name === net.name ? "bg-primary/5 border-primary" : "bg-white border-secondary dark:bg-slate-900"
                 }`}
               >
                 <div className={`h-12 w-12 rounded-xl ${net.color} flex items-center justify-center text-white font-black text-xl`}>
@@ -177,25 +289,58 @@ export default function DataPurchase() {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-black uppercase text-muted-foreground">Select Bundle</Label>
                 {isLoadingPlans && <Loader2 className="animate-spin h-4 w-4 text-primary" />}
               </div>
-              <div className="grid gap-3">
+
+              {/* Category Tabs */}
+              {availableBundles.length > 0 && (
+                <div className="flex gap-2 p-1 bg-secondary/40 rounded-2xl">
+                  {CATEGORIES.map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => { setActiveCategory(cat); setSelectedBundle(null); }}
+                      className={`flex-1 py-2 text-xs font-black rounded-xl transition-all ${
+                        activeCategory === cat
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {cat}
+                      {categorizedBundles[cat].length > 0 && (
+                        <span className="ml-1 opacity-70">({categorizedBundles[cat].length})</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid gap-3 max-h-72 overflow-y-auto pr-1">
                 {availableBundles.length === 0 && !isLoadingPlans && (
-                   <p className="text-center py-8 text-sm text-slate-400 italic">No bundles available at the moment.</p>
+                  <p className="text-center py-8 text-sm text-slate-400 italic">No bundles available at the moment.</p>
                 )}
-                {availableBundles.map((b, i) => (
+                {displayedPlans?.length === 0 && availableBundles.length > 0 && (
+                  <p className="text-center py-6 text-sm text-slate-400 italic">No {activeCategory.toLowerCase()} plans available.</p>
+                )}
+                {displayedPlans?.map((b, i) => (
                   <button
-                    key={i + (b.id || b.plan_id)}
+                    key={`plan-${activeCategory}-${i}`}
                     onClick={() => setSelectedBundle(b)}
                     className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all ${
-                      (selectedBundle?.id === b.id || selectedBundle?.plan_id === b.plan_id) ? "bg-primary/5 border-primary" : "bg-white border-secondary"
+                      selectedBundle && JSON.stringify(selectedBundle) === JSON.stringify(b)
+                        ? "bg-primary/5 border-primary"
+                        : "bg-white border-secondary dark:bg-slate-900"
                     }`}
                   >
-                    <span className="font-bold text-sm">{b.name || b.allowance}</span>
-                    <span className="font-black text-primary">₦{b.price || b.amount}</span>
+                    <div className="text-left">
+                      <p className="font-bold text-sm">{b.label || b.name || b.plan_name || b.allowance || b.data_plan || "Data Plan"}</p>
+                      {(b.validity || b.duration || b.period) && (
+                        <p className="text-xs text-muted-foreground">{b.validity || b.duration || b.period}</p>
+                      )}
+                    </div>
+                    <span className="font-black text-primary text-base">₦{b.price || b.amount || b.plan_price}</span>
                   </button>
                 ))}
               </div>
@@ -203,8 +348,8 @@ export default function DataPurchase() {
           </section>
         )}
 
-        <Button 
-          className="w-full h-16 rounded-3xl text-xl font-black shadow-2xl" 
+        <Button
+          className="w-full h-16 rounded-3xl text-xl font-black shadow-2xl"
           onClick={handlePurchase}
           disabled={isProcessing || !selectedBundle}
         >

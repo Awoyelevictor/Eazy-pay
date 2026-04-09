@@ -61,7 +61,7 @@ export default function SetupWizard() {
         <Card className="rounded-[2.5rem] border-none shadow-xl">
           <CardHeader>
             <CardTitle>1. Create Firebase Web App</CardTitle>
-            <CardDescription>Go to Firebase Console > Project Settings > General > Your Apps</CardDescription>
+            <CardDescription>Go to Firebase Console &gt; Project Settings &gt; General &gt; Your Apps</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <Link href="https://console.firebase.google.com/" target="_blank">

@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import { doc, collection, addDoc, updateDoc, increment } from "firebase/firestore";
-import { processPayment, verifyMerchant } from "@/app/actions/vtpass";
+// import { processSMEPlugElectricity, verifySMEPlugMerchant } from "@/app/actions/smeplug";
+import { processPeyflexElectricity, verifyPeyflexElectricityMeter } from "@/app/actions/peyflex";
 import { createAINotification } from "@/services/notification-service";
 
 const discoProviders = [
@@ -53,16 +54,16 @@ export default function ElectricityPurchase() {
     if (!selectedDisco || !meterNumber) return;
     setIsVerifying(true);
     try {
-      const result = await verifyMerchant({
-        billersCode: meterNumber,
-        serviceID: selectedDisco.vtuId,
-        type: meterType
-      });
-      if (result.code === '000') {
-        setVerificationData(result.content);
-        toast({ title: "Meter Verified", description: `Found: ${result.content.Customer_Name}` });
+      const result = await verifyPeyflexElectricityMeter(
+        meterNumber,
+        selectedDisco.vtuId,  // Use the Peyflex plan code (e.g., 'ikeja-electric')
+        meterType as 'prepaid' | 'postpaid'
+      );
+      if (result.status === 'success' || result.status === true) {
+        setVerificationData(result.content || result.data);
+        toast({ title: "Meter Verified", description: `Found: ${(result.content || result.data).Customer_Name}` });
       } else {
-        throw new Error(result.response_description || "Verification failed");
+        throw new Error(result.message || "Verification failed");
       }
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -88,18 +89,17 @@ export default function ElectricityPurchase() {
     setIsProcessing(true);
 
     try {
-      const requestId = Date.now().toString();
-      const result = await processPayment({
-        request_id: requestId,
-        serviceID: selectedDisco.vtuId,
-        billersCode: meterNumber,
-        variation_code: meterType,
-        amount: payAmount,
-        phone: profile?.phoneNumber || "08011111111"
+      const result = await processPeyflexElectricity({
+        identifier: 'electricity',
+        meter: meterNumber,
+        plan: selectedDisco.vtuId,
+        type: meterType as 'prepaid' | 'postpaid',
+        amount: payAmount.toString(),
+        phone: user.phoneNumber || '+234',
       });
 
-      if (result.code !== '000') {
-        throw new Error(result.response_description || "Payment failed");
+      if (result.status !== 'success' && result.status !== true) {
+        throw new Error(result.message || "Payment failed");
       }
 
       setPurchaseResult(result);
@@ -111,14 +111,16 @@ export default function ElectricityPurchase() {
         service: selectedDisco.name,
         recipient: meterNumber,
         status: "success",
+        requestId: result.reference || result.id || `SME-ELE-${Date.now()}`,
         createdAt: new Date().toISOString(),
+        provider: "SMEPlug"
       });
       
       // AI Notification
       await createAINotification(
         firestore,
         user.uid,
-        `Successful payment of NGN ${payAmount.toLocaleString()} for ${selectedDisco.name} (${meterNumber})`,
+        `Successful payment of NGN ${payAmount.toLocaleString()} for ${selectedDisco.name} (${meterNumber}) via SMEPlug`,
         user.displayName || ''
       );
 
@@ -131,7 +133,7 @@ export default function ElectricityPurchase() {
   };
 
   if (isSuccess) {
-    const token = purchaseResult?.token || purchaseResult?.purchased_code;
+    const token = purchaseResult?.token || purchaseResult?.purchased_code || purchaseResult?.pin || purchaseResult?.token_id;
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-8 text-center">
         <div className="h-24 w-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-8">

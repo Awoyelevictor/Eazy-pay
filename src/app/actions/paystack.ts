@@ -66,6 +66,12 @@ export async function processPaystackWithdrawal(payload: {
   
   const transferData = await transferRes.json();
   if (!transferData.status) {
+    // Enhanced error logging for debugging
+    console.error('PAYSTACK TRANSFER ERROR:', {
+      status: transferRes.status,
+      message: transferData.message,
+      errors: transferData.errors
+    });
     throw new Error(transferData.message || "Transfer initiation failed");
   }
 
